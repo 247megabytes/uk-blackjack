@@ -1,0 +1,10 @@
+{
+  "name": "@ukbj/game-bots",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "description": "Bot strategies and seeded simulation harness for UK Black Jack.",
+  "dependencies": { "@ukbj/game-engine": "0.1.0" }
+}

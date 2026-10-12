@@ -1,0 +1,12 @@
+{
+  "name": "@ukbj/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Expo + React Native client (Phase 2 \u2014 scaffold only).",
+  "dependencies": {
+    "@ukbj/game-engine": "0.1.0",
+    "@ukbj/game-bots": "0.1.0",
+    "@ukbj/game-protocol": "0.1.0"
+  }
+}

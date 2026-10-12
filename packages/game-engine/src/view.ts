@@ -1,0 +1,98 @@
+/**
+ * Per-player redacted views. This is the ONLY shape that should ever leave the
+ * server or be handed to a bot: no opponent hands, no deck order, no RNG state.
+ */
+
+import type { Card, CardId } from './cards';
+import { getLegalMoves, topCard } from './rules';
+import type {
+  Direction,
+  EndReason,
+  GameEvent,
+  GamePhase,
+  MoveIntent,
+  PendingAttack,
+  PlayerId,
+  RulesConfig,
+  RulesetId,
+  GameState,
+} from './types';
+
+export interface PublicPlayer {
+  readonly id: PlayerId;
+  readonly name: string;
+  readonly cardCount: number;
+  readonly declaredLastCard: boolean;
+  readonly seat: number;
+}
+
+export interface PlayerView {
+  readonly rulesetId: RulesetId;
+  readonly rules: RulesConfig;
+  readonly gameId: string;
+  readonly version: number;
+  readonly phase: GamePhase;
+  /** null for spectators. */
+  readonly viewerId: PlayerId | null;
+  readonly hand: readonly Card[];
+  readonly players: readonly PublicPlayer[];
+  readonly currentPlayerId: PlayerId;
+  readonly direction: Direction;
+  readonly topCard: Card | null;
+  readonly drawPileCount: number;
+  readonly discardPileCount: number;
+  readonly pendingAttack: PendingAttack | null;
+  /** Only populated for the viewer when it is their turn and they just drew. */
+  readonly drawnCardId: CardId | null;
+  readonly lastCardWindowPlayerId: PlayerId | null;
+  readonly turnNumber: number;
+  readonly winnerId: PlayerId | null;
+  readonly endReason: EndReason | null;
+  readonly legalMoves: readonly MoveIntent[];
+  readonly events: readonly GameEvent[];
+}
+
+/** Hides other players' drawn cards in the event log. Draw counts remain visible. */
+export function redactEvent(event: GameEvent, viewerId: PlayerId | null): GameEvent {
+  if (event.type === 'CARDS_DRAWN' && event.playerId !== viewerId) {
+    return { ...event, cards: [] };
+  }
+  return event;
+}
+
+export function getPlayerView(state: GameState, viewerId: PlayerId | null, options?: { eventsSinceVersion?: number }): PlayerView {
+  const viewer = viewerId === null ? undefined : state.players.find((p) => p.id === viewerId);
+  const effectiveViewer = viewer ? viewer.id : null;
+  const current = state.players[state.currentPlayerIndex];
+  const since = options?.eventsSinceVersion ?? -1;
+
+  return {
+    rulesetId: state.rulesetId,
+    rules: state.rules,
+    gameId: state.gameId,
+    version: state.version,
+    phase: state.phase,
+    viewerId: effectiveViewer,
+    hand: viewer ? viewer.hand.slice() : [],
+    players: state.players.map((p, seat) => ({
+      id: p.id,
+      name: p.name,
+      cardCount: p.hand.length,
+      declaredLastCard: p.declaredLastCard,
+      seat,
+    })),
+    currentPlayerId: current ? current.id : '',
+    direction: state.direction,
+    topCard: topCard(state) ?? null,
+    drawPileCount: state.drawPile.length,
+    discardPileCount: state.discardPile.length,
+    pendingAttack: state.pendingAttack,
+    drawnCardId: viewer && current && current.id === viewer.id ? state.turn.drawnCardId : null,
+    lastCardWindowPlayerId: state.lastCardWindow ? state.lastCardWindow.playerId : null,
+    turnNumber: state.turnNumber,
+    winnerId: state.winnerId,
+    endReason: state.endReason,
+    legalMoves: effectiveViewer ? getLegalMoves(state, effectiveViewer) : [],
+    events: state.events.filter((e) => e.version > since).map((e) => redactEvent(e, effectiveViewer)),
+  };
+}

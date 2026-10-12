@@ -1,0 +1,11 @@
+{
+  "name": "@ukbj/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Colyseus authoritative game server (Phase 3 \u2014 scaffold only).",
+  "dependencies": {
+    "@ukbj/game-engine": "0.1.0",
+    "@ukbj/game-protocol": "0.1.0"
+  }
+}

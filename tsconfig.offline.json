@@ -1,0 +1,13 @@
+{
+  "//": "Used only when the npm registry is unreachable: maps 'vitest' to a tiny compatible shim over node:test.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@ukbj/game-engine": ["./packages/game-engine/src/index.ts"],
+      "@ukbj/game-bots": ["./packages/game-bots/src/index.ts"],
+      "@ukbj/game-protocol": ["./packages/game-protocol/src/index.ts"],
+      "vitest": ["./tools/vitest-shim/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "tools/**/*.ts"]
+}
