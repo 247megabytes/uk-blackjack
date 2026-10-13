@@ -7,7 +7,7 @@ import {
   getLegalMoves,
   SYSTEM_PLAYER_ID,
 } from '@ukbj/game-engine';
-import { act, current, draw, hand, play, reject, scenario } from './helpers';
+import { act, current, draw, hand, play, reject, scenario, single } from './helpers';
 
 /** p1 holds 2 cards and can play 5H on 9H, going to one card. */
 const base = () => scenario({ hands: [['5H', '7C'], ['3D', '4D', '6D'], ['3S', '4S', '6S']], top: '9H' });
@@ -22,7 +22,7 @@ describe('Last Card declarations', () => {
   });
 
   it('getLegalMoves suggests declaring when a play leaves one card', () => {
-    expect(getLegalMoves(base(), 'p1')).toContainEqual({ type: 'PLAY_CARD', cardId: '5H', declareLastCard: true });
+    expect(getLegalMoves(base(), 'p1')).toContainEqual(single('5H', true));
   });
 
   it('forgetting opens a server-controlled declaration/challenge window', () => {

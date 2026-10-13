@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getLegalMoves, startGame } from '@ukbj/game-engine';
-import { act, current, draw, hand, play, reject, scenario, top } from './helpers';
+import { act, current, draw, hand, play, reject, scenario, single, top } from './helpers';
 
 const filler = ['3S', '4S', '5S', '6S'];
 
@@ -82,7 +82,7 @@ describe('red Jack cancellation', () => {
   it('the next player continues normally on the red Jack', () => {
     let s = scenario({ hands: [['JS', ...filler], ['JD', '7D', '6D'], ['5D', '4C', 'QH']], top: '9S' });
     s = act(act(s, play('p1', 'JS')), play('p2', 'JD'));
-    expect(getLegalMoves(s, 'p3')).toEqual([{ type: 'PLAY_CARD', cardId: '5D' }, { type: 'DRAW' }]);
+    expect(getLegalMoves(s, 'p3')).toEqual([single('5D'), { type: 'DRAW' }]);
   });
 
   it('cannot cancel a 2 attack', () => {
@@ -148,7 +148,7 @@ describe('skipping players (Eights)', () => {
     expect(current(s)).toBe('p3');
     s = act(s, play('p3', '8S')); // skips p4
     expect(current(s)).toBe('p1');
-    expect(getLegalMoves(s, 'p1').some((m) => m.type === 'PLAY_CARD')).toBe(false); // 4C/5C don't match 8S
+    expect(getLegalMoves(s, 'p1').some((m) => m.type === 'PLAY_CARDS')).toBe(false); // 4C/5C don't match 8S
   });
 });
 

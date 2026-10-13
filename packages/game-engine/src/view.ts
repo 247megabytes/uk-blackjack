@@ -16,6 +16,7 @@ import type {
   RulesConfig,
   RulesetId,
   GameState,
+  Suit,
 } from './types';
 
 export interface PublicPlayer {
@@ -42,6 +43,8 @@ export interface PlayerView {
   readonly drawPileCount: number;
   readonly discardPileCount: number;
   readonly pendingAttack: PendingAttack | null;
+  /** Suit chosen with a wild Ace on top of the pile (null = the top card's own suit applies). */
+  readonly activeSuit: Suit | null;
   /** Only populated for the viewer when it is their turn and they just drew. */
   readonly drawnCardId: CardId | null;
   readonly lastCardWindowPlayerId: PlayerId | null;
@@ -87,6 +90,7 @@ export function getPlayerView(state: GameState, viewerId: PlayerId | null, optio
     drawPileCount: state.drawPile.length,
     discardPileCount: state.discardPile.length,
     pendingAttack: state.pendingAttack,
+    activeSuit: state.activeSuit,
     drawnCardId: viewer && current && current.id === viewer.id ? state.turn.drawnCardId : null,
     lastCardWindowPlayerId: state.lastCardWindow ? state.lastCardWindow.playerId : null,
     turnNumber: state.turnNumber,

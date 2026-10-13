@@ -6,28 +6,21 @@
  * ("Work"), applies the change, and returns the copy as an immutable GameState.
  */
 
-import { createDeck, isBlackJack, isRedJack, type Card, type CardId } from './cards';
+import { createDeck, type Card } from './cards';
 import { gameError, GameConfigError, type GameError } from './errors';
 import { nextInt, seedToState, shuffleWithState } from './rng';
-import {
-  canAnswerAttack,
-  drawableCount,
-  findPlayerIndex,
-  isCardPlayable,
-  matchesTop,
-  playableCards,
-  topCard,
-} from './rules';
+import { drawableCount, findPlayerIndex, isCardPlayable, playContext, playerHasLegalPlay } from './rules';
+import { checkPlays, resolvePlays, type PlayOutcome } from './sequence';
 import {
   RULESET_ID,
   STATE_SCHEMA_VERSION,
   SYSTEM_PLAYER_ID,
   UK_CLASSIC_V1,
+  type CardPlay,
   type DrawReason,
   type GameAction,
   type GameEvent,
   type GameState,
-  type PendingAttack,
   type PlayerId,
   type PlayerState,
   type RulesConfig,
@@ -45,7 +38,7 @@ type Work = Omit<Mut<GameState>, 'players' | 'drawPile' | 'discardPile' | 'event
   discardPile: Card[];
   events: GameEvent[];
   processedActionIds: string[];
-  turn: { drawnCardId: CardId | null };
+  turn: { drawnCardId: GameState['turn']['drawnCardId'] };
 };
 
 function toWork(s: GameState): Work {
@@ -120,6 +113,7 @@ export function createGame(options: CreateGameOptions): GameState {
     currentPlayerIndex: 0,
     direction: 1,
     pendingAttack: null,
+    activeSuit: null,
     turn: { drawnCardId: null },
     lastCardWindow: null,
     turnNumber: 0,
@@ -134,7 +128,8 @@ export function createGame(options: CreateGameOptions): GameState {
 
 /**
  * Deals hands one card at a time round-robin, turns the starter card, and picks a
- * random first player. The starter card has no power effect, even if it is a power card.
+ * random first player. The starter card has no power effect, even if it is a power
+ * card: a starter Queen needs no cover and a starter Ace keeps its printed suit.
  */
 export function dealCards(state: GameState): GameState {
   if (state.phase !== 'dealing') throw new GameConfigError('Cards have already been dealt');
@@ -208,7 +203,7 @@ export function validateAction(state: GameState, action: GameAction): GameError 
       return null;
     case 'CHALLENGE_LAST_CARD':
       return gameError('NO_OPEN_CHALLENGE_WINDOW', 'There is no Last Card window open to challenge');
-    case 'PLAY_CARD':
+    case 'PLAY_CARDS':
     case 'DRAW':
     case 'PASS':
       break;
@@ -220,7 +215,7 @@ export function validateAction(state: GameState, action: GameAction): GameError 
 
   if (action.type === 'DRAW') {
     if (state.turn.drawnCardId) return gameError('ALREADY_DRAWN', 'You have already drawn this turn — play the drawn card or pass');
-    if (!state.pendingAttack && drawableCount(state) === 0 && playableCards(state, player).length > 0) {
+    if (!state.pendingAttack && drawableCount(state) === 0 && playerHasLegalPlay(state, player)) {
       return gameError('MUST_PLAY', 'No cards left to draw and you have a playable card');
     }
     return null;
@@ -231,27 +226,9 @@ export function validateAction(state: GameState, action: GameAction): GameError 
     return null;
   }
 
-  // PLAY_CARD
-  const card = player.hand.find((c) => c.id === action.cardId);
-  if (!card) return gameError('CARD_NOT_IN_HAND', `You do not hold ${action.cardId}`);
-  if (state.turn.drawnCardId && state.turn.drawnCardId !== card.id) {
-    return gameError('ONLY_DRAWN_CARD_PLAYABLE', 'After drawing, only the newly drawn card may be played');
-  }
-  if (state.pendingAttack && !canAnswerAttack(card, state.pendingAttack)) {
-    return gameError(
-      'MUST_ANSWER_ATTACK',
-      state.pendingAttack.kind === 'two'
-        ? 'A 2 attack can only be answered with another 2'
-        : 'A black Jack attack can only be answered with a Jack',
-    );
-  }
-  if (!state.pendingAttack && !matchesTop(card, topCard(state))) {
-    return gameError('CARD_DOES_NOT_MATCH', 'Card must match the suit or rank of the top card');
-  }
-  if (!isCardPlayable(state, card, player.hand.length)) {
-    return gameError('CANNOT_FINISH_ON_POWER_CARD', 'You cannot finish on a 2, 8, King or Jack');
-  }
-  return null;
+  // PLAY_CARDS
+  if (!Array.isArray(action.plays)) return gameError('EMPTY_PLAY', 'Choose at least one card to play');
+  return checkPlays(playContext(state, player), action.plays);
 }
 
 // ---------------------------------------------------------------------------
@@ -278,8 +255,8 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
   const before = w.events.length;
 
   switch (action.type) {
-    case 'PLAY_CARD':
-      doPlay(w, action.playerId, action.cardId, action.declareLastCard === true);
+    case 'PLAY_CARDS':
+      doPlayCards(w, action.playerId, action.plays, action.declareLastCard === true);
       break;
     case 'DRAW':
       doDraw(w);
@@ -303,19 +280,35 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
   return { ok: true, state: done(w), events: w.events.slice(before), duplicate: false };
 }
 
-function doPlay(w: Work, playerId: PlayerId, cardId: CardId, declare: boolean): void {
+function doPlayCards(w: Work, playerId: PlayerId, plays: readonly CardPlay[], declare: boolean): void {
   const idx = w.players.findIndex((p) => p.id === playerId);
   const player = playerAt(w, idx);
-  const cardIndex = player.hand.findIndex((c) => c.id === cardId);
-  const [card] = player.hand.splice(cardIndex, 1) as [Card];
-  w.discardPile.push(card);
+  const outcome = resolvePlays(playContext(done(w), player), plays, { two: w.rules.twoPenalty, blackJack: w.rules.blackJackPenalty });
+
+  const played: Card[] = [];
+  plays.forEach((p, i) => {
+    const at = player.hand.findIndex((c) => c.id === p.cardId);
+    const [card] = player.hand.splice(at, 1) as [Card];
+    w.discardPile.push(card);
+    played.push(card);
+    emit(w, { type: 'CARD_PLAYED', playerId, card, index: i, of: plays.length });
+  });
+  if (played.length > 1) emit(w, { type: 'SEQUENCE_PLAYED', playerId, cards: played });
   w.turn.drawnCardId = null;
-  emit(w, { type: 'CARD_PLAYED', playerId, card });
+  w.activeSuit = outcome.activeSuit;
 
   if (player.hand.length === 0) {
     player.declaredLastCard = false;
     finish(w, 'win', playerId);
     return;
+  }
+
+  const steps = applyOutcome(w, outcome, played);
+
+  if (outcome.queenPenalty) {
+    const queen = played[played.length - 1]!;
+    emit(w, { type: 'QUEEN_UNCOVERED', playerId, queen });
+    drawCards(w, idx, 1, 'queenPenalty'); // the drawn card cannot be played: the turn ends now
   }
 
   let needsWindow = false;
@@ -330,8 +323,6 @@ function doPlay(w: Work, playerId: PlayerId, cardId: CardId, declare: boolean): 
     }
   }
 
-  const steps = applyCardEffect(w, card);
-
   if (needsWindow) {
     w.phase = 'lastCardWindow';
     w.lastCardWindow = { playerId, resumePlayerIndex: stepIndex(w, steps) };
@@ -342,48 +333,49 @@ function doPlay(w: Work, playerId: PlayerId, cardId: CardId, declare: boolean): 
 }
 
 /**
- * Applies the power effect of `card` (already on the discard pile, played by the
- * current player). Returns how many seats to advance: 0 = same player again.
+ * Applies a resolved sequence's power effects in card order and returns how many
+ * seats to advance (mod player count; 0 = the same player goes again).
+ * Every King reverses (in a two-player game it also acts as a skip); every 8 skips.
  */
-function applyCardEffect(w: Work, card: Card): number {
+function applyOutcome(w: Work, outcome: PlayOutcome, played: readonly Card[]): number {
   const n = w.players.length;
-  const attack = w.pendingAttack;
-
-  if (card.rank === '2' || isBlackJack(card)) {
-    const kind: PendingAttack['kind'] = card.rank === '2' ? 'two' : 'blackJack';
-    const add = kind === 'two' ? w.rules.twoPenalty : w.rules.blackJackPenalty;
-    if (attack && attack.kind === kind) {
-      w.pendingAttack = { kind, amount: attack.amount + add };
-      emit(w, { type: 'ATTACK_STACKED', kind, amount: w.pendingAttack.amount });
-    } else {
-      w.pendingAttack = { kind, amount: add };
-      emit(w, { type: 'ATTACK_STARTED', kind, amount: add });
+  const actor = playerAt(w, w.currentPlayerIndex).id;
+  const byId = new Map(played.map((c) => [c.id, c]));
+  for (const e of outcome.effects) {
+    switch (e.kind) {
+      case 'attackStarted':
+        emit(w, { type: 'ATTACK_STARTED', kind: e.attack.kind, amount: e.attack.amount });
+        break;
+      case 'attackStacked':
+        emit(w, { type: 'ATTACK_STACKED', kind: e.attack.kind, amount: e.attack.amount });
+        break;
+      case 'attackCancelled':
+        emit(w, { type: 'ATTACK_CANCELLED', playerId: actor, cancelledAmount: e.cancelledAmount });
+        break;
+      case 'attackNeutralised':
+        emit(w, { type: 'ATTACK_NEUTRALISED', playerId: actor, kind: e.neutralised.kind, amount: e.neutralised.amount });
+        break;
+      case 'reverse':
+        w.direction = w.direction === 1 ? -1 : 1;
+        emit(w, { type: 'DIRECTION_REVERSED', direction: w.direction });
+        break;
+      case 'suitChosen':
+        emit(w, { type: 'SUIT_CHOSEN', playerId: actor, suit: e.suit });
+        break;
+      case 'queenCovered':
+        emit(w, { type: 'QUEEN_COVERED', playerId: actor, queen: byId.get(e.queenId)!, cover: byId.get(e.coverId)! });
+        break;
+      case 'skip':
+        break; // announced below, once the final direction is known
     }
-    return 1;
   }
-
-  if (isRedJack(card) && attack && attack.kind === 'blackJack') {
-    w.pendingAttack = null;
-    emit(w, { type: 'ATTACK_CANCELLED', playerId: playerAt(w, w.currentPlayerIndex).id, cancelledAmount: attack.amount });
-    return 1; // defender's turn ends
+  w.pendingAttack = outcome.attack;
+  const skips = outcome.eights + (n === 2 ? outcome.kings : 0);
+  for (let i = 1; i <= Math.min(outcome.eights, n - 1); i++) {
+    const skipped = playerAt(w, stepIndex(w, i));
+    if (skipped.id !== actor) emit(w, { type: 'PLAYER_SKIPPED', playerId: skipped.id });
   }
-
-  if (card.rank === 'K') {
-    w.direction = w.direction === 1 ? -1 : 1;
-    emit(w, { type: 'DIRECTION_REVERSED', direction: w.direction });
-    return n === 2 ? 0 : 1;
-  }
-
-  if (card.rank === '8') {
-    if (n === 2) {
-      emit(w, { type: 'PLAYER_SKIPPED', playerId: playerAt(w, stepIndex(w, 1)).id });
-      return 0;
-    }
-    emit(w, { type: 'PLAYER_SKIPPED', playerId: playerAt(w, stepIndex(w, 1)).id });
-    return 2;
-  }
-
-  return 1;
+  return 1 + skips;
 }
 
 function doDraw(w: Work): void {
@@ -398,9 +390,10 @@ function doDraw(w: Work): void {
 
   const drawn = drawCards(w, idx, 1, 'normal');
   const card = drawn[0];
-  if (card && isCardPlayable(done(w), card, player.hand.length)) {
-    w.turn.drawnCardId = card.id; // player may now play it or pass
-    return;
+  if (card) {
+    w.turn.drawnCardId = card.id;
+    if (isCardPlayable(done(w), card, player)) return; // player may now play it or pass
+    w.turn.drawnCardId = null;
   }
   endTurn(w, 1);
 }
@@ -482,7 +475,7 @@ function checkStalemateInPlace(w: Work): boolean {
   const capped = s.turnNumber >= s.rules.maxTurns;
   if (!capped) {
     if (s.pendingAttack || drawableCount(s) > 0) return false;
-    if (s.players.some((p) => playableCards(s, p).length > 0)) return false;
+    if (s.players.some((p) => playerHasLegalPlay(s, p))) return false;
   }
   const min = Math.min(...s.players.map((p) => p.hand.length));
   const leaders = s.players.filter((p) => p.hand.length === min);
@@ -553,14 +546,18 @@ export function resolveAttack(state: GameState): GameState {
 }
 
 /**
- * Applies the effect of `card` as if the current player had just played it (the card
- * must already be the top discard). Returns the state with attack/direction/turn updated.
+ * Applies the effect of `card` as if the current player had just played it alone (the
+ * card must already be the top discard). Aces take `chosenSuit` (default: printed suit).
  */
-export function resolveCardEffect(state: GameState, card: Card): GameState {
+export function resolveCardEffect(state: GameState, card: Card, chosenSuit?: GameState['activeSuit']): GameState {
   if (state.phase !== 'playing') return state;
   const w = toWork(state);
   w.version += 1;
-  const steps = applyCardEffect(w, card);
+  const play: CardPlay = card.rank === 'A' ? { cardId: card.id, chosenSuit: chosenSuit ?? card.suit } : { cardId: card.id };
+  const ctx = { hand: [card], top: null, activeSuit: null, pendingAttack: state.pendingAttack, drawnCardId: null };
+  const outcome = resolvePlays(ctx, [play], { two: w.rules.twoPenalty, blackJack: w.rules.blackJackPenalty });
+  w.activeSuit = outcome.activeSuit;
+  const steps = applyOutcome(w, outcome, [card]);
   endTurn(w, steps);
   return done(w);
 }

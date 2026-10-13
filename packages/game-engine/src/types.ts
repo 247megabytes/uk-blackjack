@@ -1,10 +1,10 @@
 import type { Card, CardId, Suit } from './cards';
 
-export const RULESET_ID = 'uk-classic-v1' as const;
+export const RULESET_ID = 'uk-classic-v1.1' as const;
 export type RulesetId = typeof RULESET_ID;
 
 /** Bump when the shape of GameState changes in a non-backward-compatible way. */
-export const STATE_SCHEMA_VERSION = 1 as const;
+export const STATE_SCHEMA_VERSION = 2 as const;
 
 export type PlayerId = string;
 export type Direction = 1 | -1; // 1 = clockwise, -1 = anticlockwise
@@ -87,6 +87,8 @@ export interface GameState {
   readonly currentPlayerIndex: number;
   readonly direction: Direction;
   readonly pendingAttack: PendingAttack | null;
+  /** Suit chosen with a wild Ace that is on top of the discard pile; null = printed suit applies. */
+  readonly activeSuit: Suit | null;
   readonly turn: TurnState;
   readonly lastCardWindow: LastCardWindow | null;
   readonly turnNumber: number;
@@ -110,9 +112,16 @@ interface ActionBase {
   readonly expectedVersion?: number;
 }
 
-export interface PlayCardAction extends ActionBase {
-  readonly type: 'PLAY_CARD';
+/** One card of a turn's sequence. Aces must carry the suit the player chooses. */
+export interface CardPlay {
   readonly cardId: CardId;
+  readonly chosenSuit?: Suit;
+}
+
+/** Plays one or more cards, in order, as a single turn (uk-classic-v1.1). */
+export interface PlayCardsAction extends ActionBase {
+  readonly type: 'PLAY_CARDS';
+  readonly plays: readonly CardPlay[];
   /** Announce Last Card together with the play that leaves one card in hand. */
   readonly declareLastCard?: boolean;
 }
@@ -144,7 +153,7 @@ export interface CloseLastCardWindowAction extends ActionBase {
 export const SYSTEM_PLAYER_ID = '__system__';
 
 export type GameAction =
-  | PlayCardAction
+  | PlayCardsAction
   | DrawAction
   | PassAction
   | DeclareLastCardAction
@@ -155,7 +164,7 @@ export type ActionType = GameAction['type'];
 
 /** An action without bookkeeping fields — what getLegalMoves returns. */
 export type MoveIntent =
-  | { readonly type: 'PLAY_CARD'; readonly cardId: CardId; readonly declareLastCard?: boolean }
+  | { readonly type: 'PLAY_CARDS'; readonly plays: readonly CardPlay[]; readonly declareLastCard?: boolean }
   | { readonly type: 'DRAW' }
   | { readonly type: 'PASS' }
   | { readonly type: 'DECLARE_LAST_CARD' }
@@ -168,7 +177,12 @@ export type MoveIntent =
 export type GameEvent =
   | { readonly type: 'GAME_CREATED'; readonly version: number; readonly playerIds: readonly PlayerId[] }
   | { readonly type: 'CARDS_DEALT'; readonly version: number; readonly handSize: number; readonly starterCard: Card; readonly firstPlayerId: PlayerId }
-  | { readonly type: 'CARD_PLAYED'; readonly version: number; readonly playerId: PlayerId; readonly card: Card }
+  | { readonly type: 'CARD_PLAYED'; readonly version: number; readonly playerId: PlayerId; readonly card: Card; readonly index: number; readonly of: number }
+  | { readonly type: 'SEQUENCE_PLAYED'; readonly version: number; readonly playerId: PlayerId; readonly cards: readonly Card[] }
+  | { readonly type: 'SUIT_CHOSEN'; readonly version: number; readonly playerId: PlayerId; readonly suit: Suit }
+  | { readonly type: 'QUEEN_COVERED'; readonly version: number; readonly playerId: PlayerId; readonly queen: Card; readonly cover: Card }
+  | { readonly type: 'QUEEN_UNCOVERED'; readonly version: number; readonly playerId: PlayerId; readonly queen: Card }
+  | { readonly type: 'ATTACK_NEUTRALISED'; readonly version: number; readonly playerId: PlayerId; readonly kind: AttackKind; readonly amount: number }
   | { readonly type: 'CARDS_DRAWN'; readonly version: number; readonly playerId: PlayerId; readonly cards: readonly Card[]; readonly count: number; readonly requested: number; readonly reason: DrawReason }
   | { readonly type: 'ATTACK_STARTED'; readonly version: number; readonly kind: AttackKind; readonly amount: number }
   | { readonly type: 'ATTACK_STACKED'; readonly version: number; readonly kind: AttackKind; readonly amount: number }
@@ -185,7 +199,7 @@ export type GameEvent =
   | { readonly type: 'GAME_WON'; readonly version: number; readonly playerId: PlayerId }
   | { readonly type: 'STALEMATE'; readonly version: number; readonly winnerId: PlayerId | null };
 
-export type DrawReason = 'normal' | 'blackJackPenalty' | 'twoPenalty' | 'lastCardPenalty';
+export type DrawReason = 'normal' | 'blackJackPenalty' | 'twoPenalty' | 'lastCardPenalty' | 'queenPenalty';
 
 export type GameEventType = GameEvent['type'];
 

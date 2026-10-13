@@ -96,12 +96,12 @@ describe('stalemate detection and resolution', () => {
   });
 
   it('resolves a game that exceeds the turn cap', () => {
-    let s = scenario({ hands: [['3C', '4C', '5C'], ['6D', '7D']], top: '9H', drawPile: ['AS', 'AH'], leftovers: 'discard' });
+    let s = scenario({ hands: [['3C', '4C', '5C'], ['6D', '7D']], top: '9H', drawPile: ['2S', 'AH'], leftovers: 'discard' });
     s = { ...s, rules: { ...s.rules, maxTurns: 2 }, turnNumber: 1 };
-    s = act(s, draw('p1')); // draws AH (playable) …
+    s = act(s, draw('p1')); // draws AH (wild, so playable) …
     s = act(s, pass('p1')); // … and passes: turn 2 starts
     expect(s.phase).toBe('playing');
-    s = act(s, draw('p2')); // ending turn 2 hits the cap
+    s = act(s, draw('p2')); // 2S does not match 9H: ending turn 2 hits the cap
     expect(s.phase).toBe('finished');
     expect(s.endReason).toBe('stalemate');
     expect(s.winnerId).toBe('p2'); // 3 cards vs p1's 4

@@ -49,8 +49,8 @@ export function toGameAction(playerId: PlayerId, msg: Extract<ClientMessage, { t
   const base = { actionId: msg.actionId, playerId, expectedVersion: msg.expectedVersion };
   const m = msg.move;
   switch (m.type) {
-    case 'PLAY_CARD':
-      return { ...base, type: 'PLAY_CARD', cardId: m.cardId, declareLastCard: m.declareLastCard === true };
+    case 'PLAY_CARDS':
+      return { ...base, type: 'PLAY_CARDS', plays: m.plays.map((p) => (p.chosenSuit ? { cardId: p.cardId, chosenSuit: p.chosenSuit } : { cardId: p.cardId })), declareLastCard: m.declareLastCard === true };
     case 'DRAW':
       return { ...base, type: 'DRAW' };
     case 'PASS':

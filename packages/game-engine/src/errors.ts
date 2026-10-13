@@ -19,7 +19,13 @@ export type GameErrorCode =
   | 'CANNOT_CHALLENGE_SELF'
   | 'INVALID_CHALLENGE_TARGET'
   | 'SYSTEM_ONLY'
-  | 'UNKNOWN_ACTION';
+  | 'UNKNOWN_ACTION'
+  | 'EMPTY_PLAY'
+  | 'DUPLICATE_CARD'
+  | 'INVALID_SEQUENCE'
+  | 'QUEEN_MUST_BE_COVERED'
+  | 'SUIT_CHOICE_REQUIRED'
+  | 'INVALID_SUIT_CHOICE';
 
 export interface GameError {
   readonly code: GameErrorCode;

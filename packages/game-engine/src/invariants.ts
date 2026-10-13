@@ -32,6 +32,10 @@ export function findInvariantViolations(state: GameState): string[] {
     if (state.pendingAttack.amount <= 0) v.push('non-positive attack amount');
   }
 
+  if (state.activeSuit !== null) {
+    if (topCard(state)?.rank !== 'A') v.push('active suit set but the top card is not an Ace');
+  }
+
   if (state.phase === 'lastCardWindow') {
     const w = state.lastCardWindow;
     if (!w) v.push('lastCardWindow phase without window data');

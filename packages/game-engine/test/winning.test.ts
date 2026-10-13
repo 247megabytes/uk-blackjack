@@ -10,9 +10,9 @@ describe('winning conditions', () => {
     expect(s.events.at(-1)).toMatchObject({ type: 'GAME_WON', playerId: 'p1' });
   });
 
-  it('Aces and Queens can finish', () => {
-    expect(act(scenario({ hands: [['AH'], ['3D']], top: '9H' }), play('p1', 'AH')).winnerId).toBe('p1');
-    expect(act(scenario({ hands: [['QS'], ['3D']], top: 'QH' }), play('p1', 'QS')).winnerId).toBe('p1');
+  it('v1.1: Aces and Queens can no longer finish (they joined the restricted cards)', () => {
+    expect(reject(scenario({ hands: [['AH'], ['3D']], top: '9H' }), play('p1', 'AH'))).toBe('CANNOT_FINISH_ON_POWER_CARD');
+    expect(reject(scenario({ hands: [['QS'], ['3D']], top: 'QH' }), play('p1', 'QS'))).toBe('CANNOT_FINISH_ON_POWER_CARD');
   });
 
   for (const [card, topCard] of [
@@ -21,11 +21,13 @@ describe('winning conditions', () => {
     ['KH', '9H'],
     ['JH', '9H'],
     ['JS', '9S'],
+    ['QH', '9H'],
+    ['AH', '9C'],
   ] as const) {
     it(`cannot finish on ${card}`, () => {
       const s = scenario({ hands: [[card], ['3D', '4D']], top: topCard });
       expect(reject(s, play('p1', card))).toBe('CANNOT_FINISH_ON_POWER_CARD');
-      expect(getLegalMoves(s, 'p1').filter((m) => m.type === 'PLAY_CARD')).toEqual([]);
+      expect(getLegalMoves(s, 'p1').filter((m) => m.type === 'PLAY_CARDS')).toEqual([]);
       expect(checkWinner(s)).toBeNull();
     });
   }

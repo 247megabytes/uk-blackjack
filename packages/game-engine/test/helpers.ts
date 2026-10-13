@@ -11,6 +11,7 @@ import {
   type GameAction,
   type GameState,
   type PendingAttack,
+  type Suit,
 } from '@ukbj/game-engine';
 
 export interface Scenario {
@@ -28,6 +29,7 @@ export interface Scenario {
   direction?: Direction;
   pendingAttack?: PendingAttack | null;
   drawnCardId?: string | null;
+  activeSuit?: Suit | null;
 }
 
 /**
@@ -67,6 +69,7 @@ export function scenario(s: Scenario): GameState {
     currentPlayerIndex: s.current ?? 0,
     direction: s.direction ?? 1,
     pendingAttack: s.pendingAttack ?? null,
+    activeSuit: s.activeSuit ?? null,
     turn: { drawnCardId: (s.drawnCardId ?? null) as GameState['turn']['drawnCardId'] },
     lastCardWindow: null,
     turnNumber: 1,
@@ -96,8 +99,27 @@ export function reject(state: GameState, action: Move): string {
   return res.error.code;
 }
 
-export const play = (playerId: string, cardId: string, declareLastCard?: boolean) =>
-  ({ type: 'PLAY_CARD', playerId, cardId, declareLastCard }) as Move;
+/**
+ * Card spec for plays: "5H", or an Ace with its chosen suit as "AS>H".
+ * A bare Ace ("AS") keeps its printed suit.
+ */
+export function cardPlay(spec: string): { cardId: string; chosenSuit?: string } {
+  const [cardId, suit] = spec.split('>') as [string, string | undefined];
+  if (cardId.startsWith('A')) return { cardId, chosenSuit: suit ?? cardId.slice(-1) };
+  return suit ? { cardId, chosenSuit: suit } : { cardId };
+}
+
+/** One-card play (v1-style). */
+export const play = (playerId: string, spec: string, declareLastCard?: boolean) =>
+  ({ type: 'PLAY_CARDS', playerId, plays: [cardPlay(spec)], declareLastCard }) as Move;
+
+/** Multi-card play in order, e.g. seq('p1', ['7S', '8S', '9S']). */
+export const seq = (playerId: string, specs: string[], declareLastCard?: boolean) =>
+  ({ type: 'PLAY_CARDS', playerId, plays: specs.map(cardPlay), declareLastCard }) as Move;
+
+/** The PLAY_CARDS intent getLegalMoves lists for a single card. */
+export const single = (spec: string, declareLastCard?: boolean) =>
+  (declareLastCard ? { type: 'PLAY_CARDS', plays: [cardPlay(spec)], declareLastCard: true } : { type: 'PLAY_CARDS', plays: [cardPlay(spec)] });
 export const draw = (playerId: string) => ({ type: 'DRAW', playerId }) as Move;
 export const pass = (playerId: string) => ({ type: 'PASS', playerId }) as Move;
 

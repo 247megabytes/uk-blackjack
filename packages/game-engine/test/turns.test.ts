@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, getLegalMoves, startGame, validateAction } from '@ukbj/game-engine';
-import { act, current, deepFreeze, draw, hand, pass, play, reject, scenario, top } from './helpers';
+import { act, current, deepFreeze, draw, hand, pass, play, reject, scenario, single, top } from './helpers';
 
 describe('matching suits and ranks', () => {
   const base = () => scenario({ hands: [['5H', '9S', 'QC', '4D'], ['3C', '6C']], top: '9H' });
@@ -22,8 +22,8 @@ describe('matching suits and ranks', () => {
   it('lists exactly the matching cards as legal plays, plus DRAW', () => {
     const moves = getLegalMoves(base(), 'p1');
     expect(moves).toEqual([
-      { type: 'PLAY_CARD', cardId: '5H' },
-      { type: 'PLAY_CARD', cardId: '9S' },
+      single('5H'),
+      single('9S'),
       { type: 'DRAW' },
     ]);
   });
@@ -71,9 +71,9 @@ describe('invalid moves', () => {
   });
 
   it('validateAction returns typed errors without throwing', () => {
-    const err = validateAction(base(), { type: 'PLAY_CARD', playerId: 'p1', cardId: 'KD', actionId: 'x' });
+    const err = validateAction(base(), { type: 'PLAY_CARDS', playerId: 'p1', plays: [{ cardId: 'KD' }], actionId: 'x' });
     expect(err).toMatchObject({ code: 'CARD_NOT_IN_HAND' });
-    expect(validateAction(base(), { type: 'PLAY_CARD', playerId: 'p1', cardId: '5H', actionId: 'x' })).toBeNull();
+    expect(validateAction(base(), { type: 'PLAY_CARDS', playerId: 'p1', plays: [{ cardId: '5H' }], actionId: 'x' })).toBeNull();
   });
 });
 
@@ -90,7 +90,7 @@ describe('drawing cards', () => {
     const s = act(s0, draw('p1'));
     expect(current(s)).toBe('p1');
     expect(s.turn.drawnCardId).toBe('2H');
-    expect(getLegalMoves(s, 'p1')).toEqual([{ type: 'PLAY_CARD', cardId: '2H' }, { type: 'PASS' }]);
+    expect(getLegalMoves(s, 'p1')).toEqual([single('2H'), { type: 'PASS' }]);
     const s2 = act(s, play('p1', '2H'));
     expect(top(s2)).toBe('2H');
     expect(s2.pendingAttack).toEqual({ kind: 'two', amount: 2 });
@@ -116,7 +116,7 @@ describe('drawing cards', () => {
 describe('action idempotency and immutability', () => {
   it('replaying the same actionId is a no-op returning the same state', () => {
     const s0 = scenario({ hands: [['5H', '9S', 'KC'], ['5C', '6C']], top: '9H' });
-    const action = { type: 'PLAY_CARD', playerId: 'p1', cardId: '5H', actionId: 'dup-1' } as const;
+    const action = { type: 'PLAY_CARDS', playerId: 'p1', plays: [{ cardId: '5H' }], actionId: 'dup-1' } as const;
     const r1 = applyAction(s0, action);
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
@@ -130,9 +130,9 @@ describe('action idempotency and immutability', () => {
 
   it('rejected actions do not consume the actionId', () => {
     const s0 = scenario({ hands: [['5H', '9S', 'KC'], ['5C', '6C']], top: '9H' });
-    const bad = applyAction(s0, { type: 'PLAY_CARD', playerId: 'p2', cardId: '5C', actionId: 'id-1' });
+    const bad = applyAction(s0, { type: 'PLAY_CARDS', playerId: 'p2', plays: [{ cardId: '5C' }], actionId: 'id-1' });
     expect(bad.ok).toBe(false);
-    const good = applyAction(s0, { type: 'PLAY_CARD', playerId: 'p1', cardId: '5H', actionId: 'id-1' });
+    const good = applyAction(s0, { type: 'PLAY_CARDS', playerId: 'p1', plays: [{ cardId: '5H' }], actionId: 'id-1' });
     expect(good.ok && !good.duplicate).toBe(true);
   });
 
@@ -147,7 +147,7 @@ describe('action idempotency and immutability', () => {
 
   it('emits events stamped with the new version', () => {
     const s0 = scenario({ hands: [['5H', '9S', 'KC'], ['5C', '6C']], top: '9H' });
-    const r = applyAction(s0, { type: 'PLAY_CARD', playerId: 'p1', cardId: '5H', actionId: 'ev' });
+    const r = applyAction(s0, { type: 'PLAY_CARDS', playerId: 'p1', plays: [{ cardId: '5H' }], actionId: 'ev' });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.events.map((e) => e.type)).toEqual(['CARD_PLAYED', 'TURN_STARTED']);

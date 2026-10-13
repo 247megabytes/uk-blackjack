@@ -11,8 +11,25 @@ export {
   canAnswerAttack,
   isCardPlayable,
   playableCards,
+  playerHasLegalPlay,
+  playContext,
+  playMove,
   getLegalMoves,
 } from './rules';
+export {
+  checkPlays,
+  effectiveTopSuit,
+  hasLegalPlay,
+  isFinishingRestricted,
+  isLegalFirstCard,
+  isLegalStep,
+  isRunStep,
+  minimalPlayFrom,
+  nextCardOptions,
+  queenCoverAvailable,
+  resolvePlays,
+} from './sequence';
+export type { Penalties, PlayContext, PlayEffect, PlayOutcome } from './sequence';
 export {
   createGame,
   dealCards,
