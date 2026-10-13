@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['packages/**/test/**/*.test.ts'],
+    include: ['packages/**/test/**/*.test.ts', 'apps/mobile/test/**/*.test.ts'],
     environment: 'node',
   },
 });

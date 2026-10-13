@@ -17,6 +17,14 @@
 | Recycling, partial draws, MUST_PLAY, stalemate detection/resolution, turn cap | `game-engine/test/exhaustion.test.ts` |
 | Hidden-card protection, event redaction, spectators | `game-engine/test/view.test.ts` |
 | Easy bot legality, bot isolation, deterministic and bulk seeded simulations (2–6 players × 200 games) | `game-bots/test/simulation.test.ts` |
+| Match controller (pacing, memoised bot decisions, Last Card grace/escape/catch, stale plans), 750 matches through the UI drive loop | `apps/mobile/test/match.test.ts` |
+| Banners, status lines, seat layout, hand rows/sorting | `apps/mobile/test/presentation.test.ts` |
+
+## Mobile UI checks
+- Typecheck: `npm run typecheck:mobile` (after `npm install`).
+- Manual device pass (Expo Go): see `apps/mobile/README.md`. Checklist: deal with 1 and 5 bots; play a
+  2 and a black Jack stack; block with a red Jack; reverse and skip with 2 players; forget Last Card and
+  get caught; catch a bot; win, lose, rematch; leave mid-game; toggle haptics and highlighting.
 
 ## Simulation invariants (checked after every accepted action)
 52 cards conserved, no duplicates or missing cards, only the current player takes turn actions, version

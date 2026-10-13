@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "UK Black Jack",
+    "slug": "uk-blackjack",
+    "version": "0.2.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#121614",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.ukblackjack"
+    },
+    "android": {
+      "package": "com.example.ukblackjack",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

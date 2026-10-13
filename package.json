@@ -2,7 +2,7 @@
   "name": "uk-blackjack",
   "version": "0.1.0",
   "private": true,
-  "description": "UK Black Jack — mobile-first multiplayer shedding card game",
+  "description": "UK Black Jack \u2014 mobile-first multiplayer shedding card game",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -13,15 +13,17 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:offline": "tsx --tsconfig tsconfig.offline.json --test \"packages/**/test/*.test.ts\"",
+    "test:offline": "tsx --tsconfig tsconfig.offline.json --test \"packages/**/test/*.test.ts\" \"apps/mobile/test/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:offline": "tsc -p tsconfig.offline.json --noEmit",
-    "simulate": "tsx packages/game-bots/src/cli.ts"
+    "simulate": "tsx packages/game-bots/src/cli.ts",
+    "mobile": "npm run start --workspace @ukbj/mobile",
+    "typecheck:mobile": "npm run typecheck --workspace @ukbj/mobile"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
+    "typescript": "~6.0.3",
     "vitest": "^3.2.0"
   }
 }

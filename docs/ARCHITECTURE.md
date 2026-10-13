@@ -50,6 +50,10 @@ One Colyseus room per match holds the authoritative `GameState`. Clients send `C
 and broadcasts a per-player `PlayerView`. Turn timers and the Last Card window timer are server-side; the
 server issues `CLOSE_LAST_CARD_WINDOW` and auto-draws on turn timeout. Seeds come from a CSPRNG and are never sent.
 
-## Mobile (Phase 2 plan)
-Solo play runs the engine locally with Easy bots, driven through the same `getPlayerView`/`applyAction` API,
-so the UI code is identical for solo and online play.
+## Mobile (Phase 2)
+`apps/mobile/src/game/MatchController` owns the `GameState` for an offline match. The UI asks it for a
+`Plan` (`human`, `bot` move after a delay, `closeWindow`, `finished`), keyed to the state version: the
+`useMatch` hook sets one timer per version and cancels it when the human acts first, so stale bot moves
+can never land. Bot decisions are memoised per version (safe under React StrictMode). The UI renders only
+the human's `PlayerView`. In Phase 3 the controller is swapped for a Colyseus room client exposing the
+same view/act surface.
