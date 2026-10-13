@@ -2,16 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isPowerCard, type Card, type MoveIntent } from '@ukbj/game-engine';
+import type { Card, CardPlay, MoveIntent, Suit } from '@ukbj/game-engine';
 import {
   AVATAR_COLOURS,
+  addAce,
   buildPlay,
   canArmLastCard,
   hasMove,
+  isHumanTurn,
   lastPlay,
+  lastTurnCards,
   opponentSeats,
-  playableCardIds,
+  selectableCardIds,
+  selectionState,
   statusLine,
+  tapCard,
   type MatchSetup,
   type TableEffect,
 } from '../game';
@@ -24,7 +29,9 @@ import { Felt } from '../ui/Felt';
 import { Hand } from '../ui/Hand';
 import { BellIcon, CloseIcon, DirectionIcon } from '../ui/Icons';
 import { OpponentSeat } from '../ui/OpponentSeat';
-import { AttackChip, DiscardPile, DrawPile, type Origin } from '../ui/Piles';
+import { ActiveSuitChip, AttackChip, DiscardPile, DrawPile, type Origin } from '../ui/Piles';
+import { SequenceTray } from '../ui/SequenceTray';
+import { SuitPicker } from '../ui/SuitPicker';
 import { ResultsOverlay } from '../ui/ResultsOverlay';
 import { colors, radius, serif, space } from '../ui/theme';
 
@@ -53,19 +60,27 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
   const { view, effects, nameOf, act } = useMatch(setup, settings.pacing, onEffects);
 
   const [armed, setArmed] = useState(false);
+  const [selection, setSelection] = useState<CardPlay[]>([]);
+  const [pendingAce, setPendingAce] = useState<Card | null>(null);
   const [rejected, setRejected] = useState<{ cardId: string; nonce: number } | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [confirmExit, setConfirmExit] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const recorded = useRef<string | null>(null);
 
-  const yourTurn = view.phase === 'playing' && view.currentPlayerId === view.viewerId;
-  const playable = useMemo(() => playableCardIds(view), [view]);
+  const yourTurn = isHumanTurn(view);
+  const playable = useMemo(() => selectableCardIds(view, selection), [view, selection]);
+  const selState = useMemo(() => selectionState(view, selection), [view, selection]);
   const opponents = useMemo(() => view.players.filter((p) => p.id !== view.viewerId), [view.players, view.viewerId]);
   const seats = opponentSeats(opponents.length);
 
-  // Disarm Last Card whenever the hand or turn changes.
-  useEffect(() => setArmed(false), [view.hand.length, view.currentPlayerId]);
+  // Any state change (a play, a draw, a bot move) clears the half-built sequence.
+  useEffect(() => {
+    setSelection([]);
+    setPendingAce(null);
+  }, [view.version, view.gameId]);
+  // Disarm Last Card whenever the hand, turn or selection changes what it would apply to.
+  useEffect(() => setArmed(false), [view.hand.length, view.currentPlayerId, selection.length]);
 
   // Record the result once, then reveal the results sheet after the final card lands.
   useEffect(() => {
@@ -96,23 +111,41 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
     [act, settings.haptics],
   );
 
-  const onPlay = useCallback(
+  const onTap = useCallback(
     (card: Card) => {
-      if (!yourTurn) {
-        setHint(view.phase === 'finished' ? 'The game is over' : 'Wait for your turn');
-        return;
-      }
-      const move = buildPlay(view, card.id, armed);
-      if (!move) {
+      const r = tapCard(view, selection, card);
+      if (r.kind === 'rejected') {
         setRejected({ cardId: card.id, nonce: Date.now() });
         haptic('warning', settings.haptics);
-        setHint(explainIllegal(view.drawnCardId, view.pendingAttack?.kind ?? null, view.hand.length === 1 && isPowerCard(card)));
+        setHint(r.reason);
         return;
       }
-      send(move);
+      tapHaptic(settings.haptics);
+      if (r.kind === 'chooseSuit') setPendingAce(r.card);
+      else setSelection(r.selection);
     },
-    [yourTurn, view, armed, send, settings.haptics],
+    [view, selection, settings.haptics],
   );
+
+  const onChooseSuit = useCallback(
+    (suit: Suit) => {
+      if (!pendingAce) return;
+      setSelection((sel) => addAce(sel, pendingAce, suit));
+      setPendingAce(null);
+      tapHaptic(settings.haptics);
+    },
+    [pendingAce, settings.haptics],
+  );
+
+  const onPlaySelection = useCallback(() => {
+    const move = buildPlay(view, selection, armed);
+    if (!move) {
+      haptic('warning', settings.haptics);
+      if (selState.kind === 'invalid') setHint(selState.error.message);
+      return;
+    }
+    send(move);
+  }, [view, selection, armed, send, selState, settings.haptics]);
 
   // Discard animation origin: from your hand, or from the opponent's seat.
   const play = lastPlay(view);
@@ -124,10 +157,12 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
     return { x: (seat.x - 0.5) * tableWidth, y: -(OPPONENTS_HEIGHT * (1 - seat.y) + 70) };
   }, [play, view.viewerId, opponents, seats, tableWidth, height]);
 
-  const canDraw = yourTurn && hasMove(view, 'DRAW');
-  const canPass = yourTurn && hasMove(view, 'PASS');
+  const choosing = selection.length > 0;
+  const canDraw = yourTurn && !choosing && hasMove(view, 'DRAW');
+  const canPass = yourTurn && !choosing && hasMove(view, 'PASS');
   const canDeclare = hasMove(view, 'DECLARE_LAST_CARD');
-  const canArm = canArmLastCard(view);
+  const canArm = canArmLastCard(view, selection);
+  const sequence = lastTurnCards(view);
   const challenge = view.legalMoves.find((m) => m.type === 'CHALLENGE_LAST_CARD');
   const drawLabel = view.pendingAttack ? `Pick up ${view.pendingAttack.amount}` : 'Draw';
 
@@ -169,11 +204,11 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
         {/* Centre: piles, attack chip, banners */}
         <View style={styles.centre}>
           <View style={styles.attackRow}>
-            <AttackChip attack={view.pendingAttack} />
+            {view.pendingAttack ? <AttackChip attack={view.pendingAttack} /> : <ActiveSuitChip suit={view.activeSuit} />}
           </View>
           <View style={styles.piles}>
             <DrawPile count={view.drawPileCount} enabled={canDraw} onDraw={() => send({ type: 'DRAW' })} label={canDraw ? drawLabel : 'Draw pile'} />
-            <DiscardPile top={view.topCard} origin={origin} playKey={play?.version ?? 0} />
+            <DiscardPile top={view.topCard} sequence={sequence} origin={origin} playKey={play?.version ?? 0} />
           </View>
           <View style={styles.bannerLayer} pointerEvents="none">
             <EffectBanner effects={effects} windowPlayerId={view.lastCardWindowPlayerId} />
@@ -192,6 +227,8 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
             </Text>
           )}
         </View>
+
+        <SequenceTray selection={selection} hand={view.hand} state={selState} onPlay={onPlaySelection} onClear={() => setSelection([])} />
 
         <View style={styles.actions}>
           {canDraw ? (
@@ -227,14 +264,17 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
           <Hand
             cards={view.hand}
             playable={playable}
-            showHints={yourTurn && settings.highlightPlayable}
+            selection={selection.map((p) => p.cardId)}
+            showHints={yourTurn && (settings.highlightPlayable || choosing)}
             drawnCardId={view.drawnCardId}
             rejected={rejected}
             width={tableWidth}
-            onPlay={onPlay}
+            onTap={onTap}
           />
         </View>
       </View>
+
+      {pendingAce ? <SuitPicker ace={pendingAce} onChoose={onChooseSuit} onCancel={() => setPendingAce(null)} /> : null}
 
       {showResults ? (
         <ResultsOverlay view={view} stats={stats} onRematch={onRematch} onChangeTable={onChangeTable} onHome={onExit} />
@@ -252,14 +292,6 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
       ) : null}
     </View>
   );
-}
-
-function explainIllegal(drawnCardId: string | null, attack: 'two' | 'blackJack' | null, finishingOnPower: boolean): string {
-  if (finishingOnPower) return 'You can’t finish on a 2, 8, King or Jack — draw instead';
-  if (drawnCardId) return 'Only the card you just drew can be played';
-  if (attack === 'two') return 'Answer with a 2, or pick up';
-  if (attack === 'blackJack') return 'Answer with a Jack, or pick up';
-  return 'Match the suit or the rank';
 }
 
 function LastCardButton({ armed, urgent, onPress }: { armed: boolean; urgent: boolean; onPress: () => void }) {

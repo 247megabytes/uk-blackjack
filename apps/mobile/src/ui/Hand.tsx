@@ -1,10 +1,10 @@
 import { memo, useEffect, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp, LinearTransition, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import type { Card } from '@ukbj/game-engine';
 import { cardName, fanAngle, handLayout, handRows, sortHand } from '../game';
 import { CardFace } from './PlayingCard';
-import { cardSizes } from './theme';
+import { cardSizes, colors } from './theme';
 
 const { width: CW, height: CH } = cardSizes.hand;
 const ROW_OFFSET = Math.round(CH * 0.52);
@@ -12,7 +12,10 @@ const TOP_PAD = 22;
 
 interface HandProps {
   cards: readonly Card[];
+  /** Cards that can be tapped next (start or extend the sequence). */
   playable: ReadonlySet<string>;
+  /** Cards already chosen for this turn, in play order. */
+  selection: readonly string[];
   /** Highlight playable cards and dim the rest (only meaningful on your turn). */
   showHints: boolean;
   /** The card just drawn this turn (shown raised). */
@@ -20,7 +23,7 @@ interface HandProps {
   /** Bumped to make a card shake after an illegal tap. */
   rejected: { cardId: string; nonce: number } | null;
   width: number;
-  onPlay: (card: Card) => void;
+  onTap: (card: Card) => void;
 }
 
 interface Placed {
@@ -32,9 +35,10 @@ interface Placed {
 
 /**
  * The local player's hand, sorted by suit and rank. Fans in one row, folds into two
- * rows when crowded, and scrolls only for very large hands. One tap plays a legal card.
+ * rows when crowded, and scrolls only for very large hands. Tapping builds the turn's
+ * sequence: chosen cards rise and show their order; the next legal cards are lit.
  */
-export function Hand({ cards, playable, showHints, drawnCardId, rejected, width, onPlay }: HandProps) {
+export function Hand({ cards, playable, selection, showHints, drawnCardId, rejected, width, onTap }: HandProps) {
   const available = Math.max(CW, width - 20);
   const { placed, boxWidth, boxHeight, scroll } = useMemo(() => {
     const sorted = sortHand(cards);
@@ -63,10 +67,11 @@ export function Hand({ cards, playable, showHints, drawnCardId, rejected, width,
           key={p.card.id}
           {...p}
           playable={playable.has(p.card.id)}
+          order={selection.indexOf(p.card.id)}
           showHints={showHints}
           raised={p.card.id === drawnCardId}
           shakeNonce={rejected && rejected.cardId === p.card.id ? rejected.nonce : 0}
-          onPlay={onPlay}
+          onTap={onTap}
         />
       ))}
     </View>
@@ -83,16 +88,19 @@ export function Hand({ cards, playable, showHints, drawnCardId, rejected, width,
 
 interface CardProps extends Placed {
   playable: boolean;
+  /** Position in the selected sequence, or -1. */
+  order: number;
   showHints: boolean;
   raised: boolean;
   shakeNonce: number;
-  onPlay: (card: Card) => void;
+  onTap: (card: Card) => void;
 }
 
-const HandCard = memo(function HandCard({ card, left, top, angle, playable, showHints, raised, shakeNonce, onPlay }: CardProps) {
+const HandCard = memo(function HandCard({ card, left, top, angle, playable, order, showHints, raised, shakeNonce, onTap }: CardProps) {
   const lift = useSharedValue(0);
   const shake = useSharedValue(0);
-  const target = raised ? -22 : showHints && playable ? -12 : 0;
+  const selected = order >= 0;
+  const target = selected ? -34 : raised ? -22 : showHints && playable ? -12 : 0;
 
   useEffect(() => {
     lift.value = withSpring(target, { damping: 14, stiffness: 180 });
@@ -109,12 +117,18 @@ const HandCard = memo(function HandCard({ card, left, top, angle, playable, show
   return (
     <Animated.View entering={FadeInUp.duration(260)} layout={LinearTransition.duration(220)} style={[styles.card, { left, top }, style]}>
       <Pressable
-        onPress={() => onPlay(card)}
+        onPress={() => onTap(card)}
         accessibilityRole="button"
-        accessibilityLabel={`${cardName(card)}${playable ? ', playable' : ''}`}
-        accessibilityHint={playable ? 'Plays this card' : undefined}
+        accessibilityLabel={`${cardName(card)}${selected ? `, selected ${order + 1}` : playable ? ', playable' : ''}`}
+        accessibilityHint={selected ? 'Removes this card and any after it' : playable ? 'Adds this card to your play' : undefined}
+        accessibilityState={{ selected }}
       >
-        <CardFace card={card} size="hand" highlighted={showHints && playable} dimmed={showHints && !playable} />
+        <CardFace card={card} size="hand" highlighted={selected || (showHints && playable)} dimmed={showHints && !playable && !selected} />
+        {selected ? (
+          <View style={styles.badge} pointerEvents="none">
+            <Text style={styles.badgeText}>{order + 1}</Text>
+          </View>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
@@ -124,4 +138,19 @@ const styles = StyleSheet.create({
   centre: { alignItems: 'center' },
   scroll: { paddingHorizontal: 10 },
   card: { position: 'absolute' },
+  badge: {
+    position: 'absolute',
+    top: -9,
+    right: -7,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 5,
+    backgroundColor: colors.brassBright,
+    borderWidth: 2,
+    borderColor: colors.chrome,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: colors.ink, fontWeight: '800', fontSize: 13 },
 });

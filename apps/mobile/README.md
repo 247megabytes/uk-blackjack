@@ -22,6 +22,12 @@ run `npx expo install expo@latest --fix` in `apps/mobile`, then try again.
 Other targets: `npm run ios --workspace @ukbj/mobile` (iOS Simulator, macOS + Xcode),
 `npm run android --workspace @ukbj/mobile`, `npm run web --workspace @ukbj/mobile`.
 
+## Playing a turn (v1.1)
+Tap lit cards in the order you want to play them. Each card you pick rises with a number, and the
+cards that can follow light up. Tap the last picked card to take it back. The tray shows what will
+happen; tap **Play**. Tapping an Ace asks you to call a suit. After a Queen, only its suit lights
+up; if you have none, the tray warns you'll pick up one card.
+
 ## Structure
 
 ```

@@ -10,6 +10,8 @@ const POWERS: { cards: string[]; title: string; body: string }[] = [
   { cards: ['2H', '2C'], title: 'Twos', body: 'The next player picks up 2. Twos stack in any suit, but never mix with Jacks.' },
   { cards: ['KD'], title: 'Kings', body: 'Reverse the direction of play. With two players, you go again.' },
   { cards: ['8S'], title: 'Eights', body: 'Skip the next player. With two players, you go again.' },
+  { cards: ['QH', '6H'], title: 'Queens', body: 'Must be covered straight away by a card of the same suit. Can’t cover? Pick up one card and your turn ends.' },
+  { cards: ['AS', 'AD'], title: 'Aces', body: 'Wild: play one on anything, then call the suit play continues in. Not while you’re under attack.' },
 ];
 
 export function HowToPlayScreen({ onBack }: { onBack: () => void }) {
@@ -19,7 +21,10 @@ export function HowToPlayScreen({ onBack }: { onBack: () => void }) {
         Be the first to get rid of all your cards. Everyone starts with seven.
       </Section>
       <Section title="Your turn">
-        Play one card that matches the top card by suit or by rank. If you can’t, or don’t want to, tap the deck to draw one. If the drawn card fits you may play it straight away, or pass.
+        Your first card must match the top card by suit or rank. If you can’t, or don’t want to, tap the deck to draw one. If the drawn card fits you may play it straight away, or pass.
+      </Section>
+      <Section title="Playing several cards">
+        Keep adding cards in the same turn: the same rank (7♥ then 7♠), or the next number up in the same suit (7♠ 8♠ 9♠). Aces count as 1 and are wild. Tap cards in order, check the tray, then tap Play. Every power card you play takes effect — two 8s skip two players.
       </Section>
 
       <Text style={styles.h2} accessibilityRole="header">
@@ -39,13 +44,13 @@ export function HowToPlayScreen({ onBack }: { onBack: () => void }) {
         </View>
       ))}
       <Section title="Under attack">
-        When a 2 or black Jack is played on you, answer with the same kind of card to pass the pick-up along, use a red Jack against black Jacks, or take the cards and miss your turn.
+        When a 2 or black Jack is played on you, answer with the same kind of card — as many as you like — to pass the pick-up along, use a red Jack against black Jacks, or take the cards and miss your turn. Cover your own 2 with the next card up (2♠ 3♠) and the pick-up is cancelled.
       </Section>
       <Section title="Last Card">
         When your play leaves you with one card, tap the brass Last Card button first. Forget, and you get a moment to say it late — but if someone catches you first, you pick up 2. You can catch the bots too.
       </Section>
       <Section title="Going out">
-        Your final card must be an ordinary card. You can’t finish on a 2, 8, King or Jack — you’ll have to draw instead.
+        Your final card must be an ordinary card. You can’t finish on a 2, 8, Jack, Queen, King or Ace — you’ll have to draw instead.
       </Section>
       <Section title="Running out of cards">
         When the deck empties, the played cards are shuffled back in, keeping the top card on the table.

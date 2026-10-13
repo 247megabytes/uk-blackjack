@@ -45,8 +45,8 @@ describe('describeEvents', () => {
     const fx = describeEvents(
       [
         ev({ type: 'CARDS_DRAWN', playerId: 'bot1', cards: [], count: 1, requested: 1, reason: 'normal' }),
-        ev({ type: 'CARD_PLAYED', playerId: 'bot1', card: parseCard('5H') }),
-        ev({ type: 'TURN_STARTED', playerId: 'you', turnNumber: 3 }),
+        ev({ type: 'CARD_PLAYED', playerId: 'bot1', card: parseCard('5H'), index: 0, of: 1 }),
+        ev({ type: 'TURN_STARTED', playerId: 'bot2', turnNumber: 3 }),
       ],
       'you',
       nameOf,
@@ -64,6 +64,29 @@ describe('describeEvents', () => {
   it('describes wins and stalemates', () => {
     expect(describeEvents([ev({ type: 'GAME_WON', playerId: 'you' })], 'you', nameOf)[0]!.title).toBe('You win!');
     expect(describeEvents([ev({ type: 'STALEMATE', winnerId: null })], 'you', nameOf)[0]!.subtitle).toBe('Nobody can move');
+  });
+});
+
+describe('v1.1 banners', () => {
+  it('announces sequences, called suits, uncovered Queens, covered attacks and your turn', () => {
+    const fx = describeEvents(
+      [
+        ev({ type: 'SEQUENCE_PLAYED', playerId: 'bot1', cards: ['7S', '8S', '9S'].map(parseCard) }),
+        ev({ type: 'SUIT_CHOSEN', playerId: 'bot2', suit: 'H' }),
+        ev({ type: 'QUEEN_UNCOVERED', playerId: 'you', queen: parseCard('QH') }),
+        ev({ type: 'ATTACK_NEUTRALISED', playerId: 'bot1', kind: 'two', amount: 2 }),
+        ev({ type: 'TURN_STARTED', playerId: 'you', turnNumber: 4 }),
+      ],
+      'you',
+      nameOf,
+    );
+    expect(fx.map((f) => f.title)).toEqual(['Ada plays 3 cards', 'Hearts!', 'Queen left uncovered', 'Covered', 'Your turn']);
+    expect(fx[1]!.subtitle).toBe('Monty calls hearts with an Ace');
+    expect(fx[2]!.subtitle).toBe('You pick up 1');
+    expect(fx[2]!.haptic).toBe('error');
+    // "Your turn" never hides anything more important in the same batch.
+    expect(pickBanner(fx)!.title).not.toBe('Your turn');
+    expect(pickBanner([fx[4]!])!.title).toBe('Your turn');
   });
 });
 
@@ -97,8 +120,8 @@ describe('view helpers', () => {
     for (let i = 0; i < 20 && !lastPlay(m.view()); i++) {
       const plan = m.plan({ botTurnMs: 1, botTurnJitterMs: 0, windowBotDeclareMs: 1, windowChallengeMs: 1, windowHumanGraceMs: 1, windowCloseMs: 1 });
       if (plan.kind === 'human') {
-        const move = m.view().legalMoves.find((x) => x.type === 'PLAY_CARD') ?? { type: 'DRAW' as const };
-        m.submitHuman(move.type === 'PLAY_CARD' ? { type: 'PLAY_CARD', cardId: move.cardId } : move);
+        const move = m.view().legalMoves.find((x) => x.type === 'PLAY_CARDS') ?? { type: 'DRAW' as const };
+        m.submitHuman(move);
         if (m.view().drawnCardId) m.submitHuman({ type: 'PASS' });
       } else m.runPlan(plan);
     }

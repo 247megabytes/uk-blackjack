@@ -18,7 +18,7 @@ Dependency direction is strictly one-way: `apps → protocol/bots → engine`.
 ## Engine model
 - **State** (`GameState`): plain JSON-serialisable data — hands, draw/discard piles, turn index,
   direction, pending attack, phase, Last Card window, RNG state, version, event log.
-- **Actions** (`GameAction`): `PLAY_CARD`, `DRAW`, `PASS`, `DECLARE_LAST_CARD`,
+- **Actions** (`GameAction`): `PLAY_CARDS` (an ordered list of `{cardId, chosenSuit?}`), `DRAW`, `PASS`, `DECLARE_LAST_CARD`,
   `CHALLENGE_LAST_CARD`, and server-only `CLOSE_LAST_CARD_WINDOW`.
 - **Transition**: `applyAction(state, action) → { ok, state, events } | { ok: false, error }`.
   Inputs are never mutated (verified by deep-freezing in tests).
@@ -38,6 +38,12 @@ Dependency direction is strictly one-way: `apps → protocol/bots → engine`.
   viewer's legal moves, and an event log with other players' drawn cards redacted.
 - **Invariants**: `findInvariantViolations(state)` checks 52-card conservation, uniqueness, turn index,
   attack/top-card consistency, window consistency and end-state sanity.
+
+- **Card-play rules** (`src/sequence.ts`): pure functions over a small `PlayContext` (hand, top card,
+  active suit, attack, drawn card) — `nextCardOptions`, `checkPlays`, `resolvePlays`. The engine builds
+  the context from `GameState`; bots and the app build it from their redacted `PlayerView`, so all three
+  apply identical rules without hidden information. `getLegalMoves` lists one complete play per
+  starting card (one per suit for Aces); longer sequences are built with `nextCardOptions`.
 
 ## Bots
 Bots implement `chooseMove(view: PlayerView): MoveIntent | null` and only ever receive a `PlayerView`.

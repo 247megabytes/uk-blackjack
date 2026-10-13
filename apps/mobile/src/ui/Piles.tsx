@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming, withSpring } from 'react-native-reanimated';
-import type { Card, PendingAttack } from '@ukbj/game-engine';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming, withSpring, ZoomIn } from 'react-native-reanimated';
+import { SUIT_NAMES, type Card, type PendingAttack, type Suit } from '@ukbj/game-engine';
+import { SuitIcon } from './SuitIcon';
 import { discardTilt } from '../game';
 import { CardBack, CardFace } from './PlayingCard';
 import { cardSizes, colors, radius } from './theme';
@@ -15,6 +16,8 @@ export interface Origin {
 
 interface DiscardProps {
   top: Card | null;
+  /** Cards of the latest turn, in order (several for a sequence). */
+  sequence?: readonly Card[];
   /** Where the newest card was thrown from, relative to the pile centre. */
   origin: Origin;
   /** Changes whenever a new card lands (the play's state version). */
@@ -25,7 +28,7 @@ interface DiscardProps {
  * The discard pile. When a new card lands it flies in from the player's seat and
  * settles with its own tilt, while the previous card stays visible underneath.
  */
-export function DiscardPile({ top, origin, playKey }: DiscardProps) {
+export function DiscardPile({ top, sequence = [], origin, playKey }: DiscardProps) {
   const [under, setUnder] = useState<Card | null>(null);
   const prevTop = useRef<Card | null>(top);
   const tx = useSharedValue(0);
@@ -36,7 +39,8 @@ export function DiscardPile({ top, origin, playKey }: DiscardProps) {
   useEffect(() => {
     if (!top) return;
     if (prevTop.current && prevTop.current.id !== top.id) {
-      setUnder(prevTop.current);
+      // For a sequence, the card beneath is the previous card of that sequence.
+      setUnder(sequence.length >= 2 ? sequence[sequence.length - 2]! : prevTop.current);
       tx.value = origin.x;
       ty.value = origin.y;
       rot.value = origin.x * 0.08 + (origin.y > 0 ? -8 : 8);
@@ -103,6 +107,18 @@ export function DrawPile({ count, enabled, onDraw, label }: DrawProps) {
   );
 }
 
+/** Shows the suit called with a wild Ace while that Ace is on top. */
+export function ActiveSuitChip({ suit }: { suit: Suit | null }) {
+  if (!suit) return null;
+  const red = suit === 'H' || suit === 'D';
+  return (
+    <Animated.View entering={ZoomIn.duration(180)} style={styles.suitChip} accessible accessibilityLabel={`${SUIT_NAMES[suit]} called`} accessibilityLiveRegion="polite">
+      <SuitIcon suit={suit} size={16} colour={red ? colors.red : colors.ink} />
+      <Text style={styles.suitChipText}>{SUIT_NAMES[suit]} called</Text>
+    </Animated.View>
+  );
+}
+
 /** "Pick up N" chip shown while an attack is pending. */
 export function AttackChip({ attack }: { attack: PendingAttack | null }) {
   const s = useSharedValue(0);
@@ -155,4 +171,16 @@ const styles = StyleSheet.create({
     borderColor: colors.redSoft,
   },
   attackText: { color: '#FFF6F2', fontWeight: '700', fontSize: 14 },
+  suitChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.ivory,
+    borderWidth: 1,
+    borderColor: colors.brass,
+  },
+  suitChipText: { color: colors.ink, fontWeight: '700', fontSize: 13 },
 });

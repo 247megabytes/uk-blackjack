@@ -14,7 +14,7 @@ interface FaceProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const POWER_NOTE: Partial<Record<Card['rank'], string>> = { '2': '+2', '8': 'Skip', K: 'Reverse' };
+const POWER_NOTE: Partial<Record<Card['rank'], string>> = { '2': '+2', '8': 'Skip', K: 'Reverse', Q: 'Cover', A: 'Wild' };
 
 function powerNote(card: Card): string | undefined {
   if (card.rank === 'J') return card.suit === 'S' || card.suit === 'C' ? '+5' : 'Block';
@@ -61,7 +61,7 @@ export const CardFace = memo(function CardFace({ card, size = 'hand', dimmed, hi
         <SuitIcon suit={card.suit} size={11 * scale} />
       </View>
 
-      {note && size !== 'mini' ? (
+      {note && width >= 50 ? (
         <Text style={[styles.note, { fontSize: 8.5 * scale, bottom: 5 * scale, left: 6 * scale }]}>{note}</Text>
       ) : null}
 

@@ -11,6 +11,7 @@ const TONE: Record<EffectTone, { bg: string; border: string; text: string }> = {
   info: { bg: colors.surfaceRaised, border: colors.hairline, text: colors.text },
   warn: { bg: colors.brass, border: colors.brassBright, text: colors.ink },
   win: { bg: colors.brass, border: colors.brassBright, text: colors.ink },
+  turn: { bg: colors.baize, border: colors.brassBright, text: colors.text },
 };
 
 interface Props {
@@ -34,7 +35,7 @@ export function EffectBanner({ effects, windowPlayerId }: Props) {
   useEffect(() => {
     if (!current) return;
     if (current.windowFor) return; // lives exactly as long as its window (below)
-    const t = setTimeout(() => setCurrent((c) => (c === current ? null : c)), 1400);
+    const t = setTimeout(() => setCurrent((c) => (c === current ? null : c)), current.tone === 'turn' ? 900 : 1400);
     return () => clearTimeout(t);
   }, [current]);
 

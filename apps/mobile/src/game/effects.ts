@@ -5,7 +5,7 @@
 
 import { SUIT_NAMES, type Card, type GameEvent, type PlayerId, type PlayerView } from '@ukbj/game-engine';
 
-export type EffectTone = 'attack' | 'defend' | 'info' | 'warn' | 'win';
+export type EffectTone = 'attack' | 'defend' | 'info' | 'warn' | 'win' | 'turn';
 export type HapticHint = 'none' | 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error';
 
 export interface TableEffect {
@@ -21,7 +21,7 @@ export interface TableEffect {
   readonly windowFor?: PlayerId;
 }
 
-const TONE_PRIORITY: Record<EffectTone, number> = { win: 5, attack: 4, warn: 3, defend: 3, info: 1 };
+const TONE_PRIORITY: Record<EffectTone, number> = { win: 5, attack: 4, warn: 3, defend: 3, info: 1, turn: 0 };
 
 /**
  * Chooses the one banner to show for a batch of simultaneous effects: the most
@@ -109,6 +109,27 @@ export function describeEvents(
           playerId: e.targetPlayerId,
         });
         break;
+      case 'SEQUENCE_PLAYED':
+        push(e, { title: `${who(e.playerId)} ${isYou(e.playerId) ? 'play' : 'plays'} ${e.cards.length} cards`, tone: 'info', haptic: 'light', playerId: e.playerId });
+        break;
+      case 'SUIT_CHOSEN':
+        push(e, { title: `${SUIT_NAMES[e.suit]}!`, subtitle: `${who(e.playerId)} ${isYou(e.playerId) ? 'call' : 'calls'} ${SUIT_NAMES[e.suit].toLowerCase()} with an Ace`, tone: 'warn', haptic: 'medium', playerId: e.playerId });
+        break;
+      case 'QUEEN_UNCOVERED':
+        push(e, {
+          title: 'Queen left uncovered',
+          subtitle: `${who(e.playerId)} ${isYou(e.playerId) ? 'pick' : 'picks'} up 1`,
+          tone: 'warn',
+          haptic: isYou(e.playerId) ? 'error' : 'light',
+          playerId: e.playerId,
+        });
+        break;
+      case 'ATTACK_NEUTRALISED':
+        push(e, { title: 'Covered', subtitle: `${e.kind === 'two' ? 'The 2' : 'The black Jack'} is cancelled — no pick-up`, tone: 'defend', haptic: 'light', playerId: e.playerId });
+        break;
+      case 'TURN_STARTED':
+        if (isYou(e.playerId)) push(e, { title: 'Your turn', tone: 'turn', haptic: 'light', playerId: e.playerId });
+        break;
       case 'DISCARDS_RECYCLED':
         push(e, { title: 'Reshuffle', subtitle: `${e.count} cards back in the deck`, tone: 'info', haptic: 'light' });
         break;
@@ -123,6 +144,13 @@ export function describeEvents(
     }
   }
   return out;
+}
+
+/** The cards played in the most recent turn, in order (for the discard fan). */
+export function lastTurnCards(view: PlayerView): Card[] {
+  const play = lastPlay(view);
+  if (!play) return [];
+  return view.events.filter((e): e is Extract<GameEvent, { type: 'CARD_PLAYED' }> => e.type === 'CARD_PLAYED' && e.version === play.version).map((e) => e.card);
 }
 
 /** The most recent CARD_PLAYED event in a view (used to animate the discard from the right seat). */
@@ -149,7 +177,8 @@ export function statusLine(view: PlayerView, nameOf: (id: PlayerId) => string): 
   }
   if (view.drawnCardId) return 'Play the card you drew, or pass';
   const top = view.topCard;
-  const hasPlay = view.legalMoves.some((m) => m.type === 'PLAY_CARD');
+  const hasPlay = view.legalMoves.some((m) => m.type === 'PLAY_CARDS');
   if (!hasPlay) return 'No match — draw a card';
+  if (view.activeSuit) return `Your turn — ${SUIT_NAMES[view.activeSuit].toLowerCase()} were called, or play an Ace`;
   return top ? `Your turn — match ${SUIT_NAMES[top.suit].toLowerCase()} or ${RANK_NAMES[top.rank].toLowerCase()}s` : 'Your turn';
 }

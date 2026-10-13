@@ -1,7 +1,7 @@
 # UK Black Jack
 
 Premium mobile-first multiplayer card game based on the British shedding game (not casino Blackjack).
-Ruleset: `uk-classic-v1` — see [docs/RULES.md](docs/RULES.md).
+Ruleset: `uk-classic-v1.1` (multi-card turns, Queen covering, wild Aces) — see [docs/RULES.md](docs/RULES.md).
 
 ## Status
 Phase 2 complete: playable offline mobile game (Expo) against 1–5 bots, on top of the Phase 1
@@ -33,7 +33,7 @@ import { startGame, getPlayerView, applyAction } from '@ukbj/game-engine';
 
 let state = startGame({ seed: 'secret-seed', players: [{ id: 'me', name: 'Me' }, { id: 'bot', name: 'Bot' }] });
 const view = getPlayerView(state, 'me');            // safe to show / send
-const move = view.legalMoves[0]!;
+const move = view.legalMoves[0]!; // e.g. { type: 'PLAY_CARDS', plays: [{ cardId: '7S' }] }
 const result = applyAction(state, { ...move, playerId: 'me', actionId: crypto.randomUUID() });
 if (result.ok) state = result.state; else console.log(result.error.code);
 ```

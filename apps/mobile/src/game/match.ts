@@ -10,17 +10,26 @@
 
 import {
   applyAction,
+  checkPlays,
+  minimalPlayFrom,
+  nextCardOptions,
+  resolvePlays,
   getPlayerView,
   startGame,
   SYSTEM_PLAYER_ID,
   type ActionResult,
+  type Card,
+  type CardPlay,
   type GameAction,
+  type GameError,
+  type PlayOutcome,
+  type Suit,
   type GameState,
   type MoveIntent,
   type PlayerId,
   type PlayerView,
 } from '@ukbj/game-engine';
-import { createEasyBot, type Bot } from '@ukbj/game-bots';
+import { contextFromView, createEasyBot, type Bot } from '@ukbj/game-bots';
 import { BOT_NAMES } from './names';
 
 export const HUMAN_ID: PlayerId = 'you';
@@ -198,32 +207,105 @@ export class MatchController {
 // Human move helpers used by the UI
 // ---------------------------------------------------------------------------
 
-export type PlayMove = Extract<MoveIntent, { type: 'PLAY_CARD' }>;
-
-/** Card ids the human may play right now. */
-export function playableCardIds(view: PlayerView): Set<string> {
-  return new Set(view.legalMoves.filter((m): m is PlayMove => m.type === 'PLAY_CARD').map((m) => m.cardId));
-}
+export type PlayMove = Extract<MoveIntent, { type: 'PLAY_CARDS' }>;
 
 export function hasMove(view: PlayerView, type: MoveIntent['type']): boolean {
   return view.legalMoves.some((m) => m.type === type);
 }
 
-/**
- * Builds the play for a tapped card. The engine suggests declaring Last Card on any
- * play that leaves one card; the human only declares if they armed the Last Card
- * button — forgetting is part of the game.
- */
-export function buildPlay(view: PlayerView, cardId: string, lastCardArmed: boolean): PlayMove | null {
-  const legal = view.legalMoves.find((m): m is PlayMove => m.type === 'PLAY_CARD' && m.cardId === cardId);
-  if (!legal) return null;
-  const leavesOne = view.hand.length === 2;
-  return leavesOne && lastCardArmed ? { type: 'PLAY_CARD', cardId: legal.cardId, declareLastCard: true } : { type: 'PLAY_CARD', cardId: legal.cardId };
+/** True when it is the human's turn to play cards (not during a Last Card window). */
+export function isHumanTurn(view: PlayerView): boolean {
+  return view.phase === 'playing' && view.currentPlayerId === view.viewerId;
 }
 
-/** Whether the "Last Card" button should be offered to arm before a play. */
-export function canArmLastCard(view: PlayerView): boolean {
-  return view.phase === 'playing' && view.currentPlayerId === view.viewerId && view.hand.length === 2 && playableCardIds(view).size > 0;
+/**
+ * Card ids that may be tapped next to extend `selection`. With an empty selection
+ * these are the cards that can start a complete legal play.
+ */
+export function selectableCardIds(view: PlayerView, selection: readonly CardPlay[]): Set<string> {
+  if (!isHumanTurn(view)) return new Set();
+  const ctx = contextFromView(view);
+  const options = nextCardOptions(ctx, selection);
+  const usable = selection.length === 0 ? options.filter((c) => minimalPlayFrom(ctx, c) !== null) : options;
+  return new Set(usable.map((c) => c.id));
+}
+
+/** Kept for callers that only need the starting cards. */
+export function playableCardIds(view: PlayerView): Set<string> {
+  return selectableCardIds(view, []);
+}
+
+export type SelectionState =
+  | { readonly kind: 'empty' }
+  | { readonly kind: 'ready'; readonly queenPenalty: boolean; readonly leavesOne: boolean; readonly outcome: PlayOutcome }
+  | { readonly kind: 'needsCover'; readonly suit: Suit }
+  | { readonly kind: 'invalid'; readonly error: GameError };
+
+/** What would happen if the human played `selection` now — drives the tray and Play button. */
+export function selectionState(view: PlayerView, selection: readonly CardPlay[]): SelectionState {
+  if (selection.length === 0) return { kind: 'empty' };
+  const ctx = contextFromView(view);
+  const error = checkPlays(ctx, selection);
+  if (error) {
+    if (error.code === 'QUEEN_MUST_BE_COVERED') {
+      const last = view.hand.find((c) => c.id === selection[selection.length - 1]!.cardId);
+      if (last?.rank === 'Q') return { kind: 'needsCover', suit: last.suit };
+    }
+    return { kind: 'invalid', error };
+  }
+  const outcome = resolvePlays(ctx, selection, { two: view.rules.twoPenalty, blackJack: view.rules.blackJackPenalty });
+  return { kind: 'ready', queenPenalty: outcome.queenPenalty, leavesOne: !outcome.queenPenalty && outcome.cardsLeft === 1, outcome };
+}
+
+/** Explains why `card` cannot be added to `selection` right now (for the shake + hint). */
+export function explainUnselectable(view: PlayerView, selection: readonly CardPlay[], card: Card): string {
+  if (!isHumanTurn(view)) return view.phase === 'finished' ? 'The game is over' : 'Wait for your turn';
+  const ctx = contextFromView(view);
+  const trial: CardPlay[] = [...selection, card.rank === 'A' ? { cardId: card.id, chosenSuit: card.suit } : { cardId: card.id }];
+  const err = checkPlays(ctx, trial);
+  if (err && err.code !== 'QUEEN_MUST_BE_COVERED' && err.code !== 'CANNOT_FINISH_ON_POWER_CARD') return err.message;
+  if (selection.length === 0 && view.hand.length === 1) return 'You can’t finish on a 2, 8, Jack, Queen, King or Ace — draw instead';
+  return err?.message ?? 'That card can’t be played now';
+}
+
+/**
+ * Tapping a card in the hand: tapping the last selected card removes it, tapping an
+ * earlier selected card cuts the sequence back to before it, tapping a selectable
+ * card appends it. Aces need a suit first, so they return 'chooseSuit'.
+ */
+export type TapResult =
+  | { readonly kind: 'selection'; readonly selection: CardPlay[] }
+  | { readonly kind: 'chooseSuit'; readonly card: Card }
+  | { readonly kind: 'rejected'; readonly reason: string };
+
+export function tapCard(view: PlayerView, selection: readonly CardPlay[], card: Card): TapResult {
+  const at = selection.findIndex((p) => p.cardId === card.id);
+  if (at >= 0) return { kind: 'selection', selection: selection.slice(0, at) };
+  if (!selectableCardIds(view, selection).has(card.id)) return { kind: 'rejected', reason: explainUnselectable(view, selection, card) };
+  if (card.rank === 'A') return { kind: 'chooseSuit', card };
+  return { kind: 'selection', selection: [...selection, { cardId: card.id }] };
+}
+
+export function addAce(selection: readonly CardPlay[], card: Card, suit: Suit): CardPlay[] {
+  return [...selection, { cardId: card.id, chosenSuit: suit }];
+}
+
+/**
+ * Builds the PLAY_CARDS move for the current selection. Last Card is declared only if
+ * the human armed the button — forgetting is part of the game.
+ */
+export function buildPlay(view: PlayerView, selection: readonly CardPlay[], lastCardArmed: boolean): PlayMove | null {
+  const state = selectionState(view, selection);
+  if (state.kind !== 'ready') return null;
+  return state.leavesOne && lastCardArmed
+    ? { type: 'PLAY_CARDS', plays: [...selection], declareLastCard: true }
+    : { type: 'PLAY_CARDS', plays: [...selection] };
+}
+
+/** Whether the "Last Card" button should be offered to arm before playing `selection`. */
+export function canArmLastCard(view: PlayerView, selection: readonly CardPlay[]): boolean {
+  const s = selectionState(view, selection);
+  return isHumanTurn(view) && s.kind === 'ready' && s.leavesOne;
 }
 
 export interface Standing {

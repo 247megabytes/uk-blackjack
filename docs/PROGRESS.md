@@ -67,9 +67,46 @@
 **Decisions taken**
 - Target Expo SDK 57 (current stable; SDK 58 is in preview) so App Store Expo Go can run it.
 - No navigation library yet (five screens, simple in-app router); Expo Router can come with Phase 3.
-- One tap plays a legal card (no select-then-confirm).
+- One tap plays a legal card (no select-then-confirm). *(Superseded in v1.1 by tap-to-build + Play.)*
 - No sound yet (Phase 4); haptics only. App icon/splash are Expo defaults.
 - Placeholder bundle id `com.example.ukblackjack` — needs your real one before TestFlight/Play builds.
+
+## Rules update — uk-classic-v1.1 ✅ (2026-10-14)
+
+**Done**
+- Engine: `PLAY_CARDS` (ordered multi-card turns), Queen covering and the one-card Queen penalty,
+  wild Aces with a called suit (`state.activeSuit`), schema v2, new events (`SEQUENCE_PLAYED`,
+  `SUIT_CHOSEN`, `QUEEN_COVERED`, `QUEEN_UNCOVERED`, `ATTACK_NEUTRALISED`, draw reason `queenPenalty`).
+  Card rules live in `packages/game-engine/src/sequence.ts`, shared by the engine, bots and app.
+- Easy bots build random legal sequences, cover Queens, take the Queen penalty and call random suits.
+- Mobile: tap cards to build an ordered sequence (lit next cards, numbered badges, tap to undo),
+  a sequence tray with a Play button and live guidance, a Queen cover prompt, a suit picker for
+  Aces, a "suit called" chip, and banners for sequences, called suits, Queen pick-ups, covered
+  attacks and "Your turn". How to Play is updated.
+- Interaction rules confirmed with the product owner and documented in RULES.md.
+
+**Verified (in the build sandbox)**
+- `npm run test:offline`: 200 tests, 200 pass — 105 migrated regression tests (3 updated for
+  deliberate v1.1 changes: ruleset id, Aces/Queens can no longer finish, A♠ draw now playable),
+  47 new engine tests (sequences, Queens, Aces), 10 bot tests, 38 mobile tests.
+- 10,000 seeded Easy-bot simulations (2,000 each for 2–6 players): all finished, 0 invariant
+  violations, 0 rejected bot moves.
+- Mutation checks: disabling Queen cover, allowing cross-suit runs, making Aces non-wild, letting
+  Aces finish, or switching off the Queen penalty each caused failing tests (2–10 per mutation).
+- Engine strict typecheck clean; the whole app typechecks against real React 19 / React Native
+  0.86.3 typings.
+- Headless browser: 15 UI games (1, 3, 5 bots) with real taps — multi-card plays, suit picks,
+  Queen covers and Queen pick-ups — 0 console errors or warnings.
+
+**Not yet verified**
+- On-device behaviour (iPhone/Expo Go), and `npm test` / `npm run typecheck:mobile` after
+  `npm install`; the sandbox cannot install npm packages.
+- Drag-to-play is not implemented; tap-to-build replaced the one-tap play.
+
+**Interpretations I made that need your sign-off**
+- "Covering a 2 cancels it" is also applied to a black Jack covered by an Ace.
+- Skips and reverses from a sequence resolve at the end of the turn using the final direction.
+- A Queen cover counts as unavailable if it would have to be an illegal finishing card.
 
 ## Phase 3 — Multiplayer ⏳ next
 

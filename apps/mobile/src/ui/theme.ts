@@ -40,6 +40,7 @@ export const cardSizes = {
   hand: { width: 64, height: 92 },
   table: { width: 78, height: 112 },
   mini: { width: 20, height: 29 },
+  tray: { width: 36, height: 52 },
   showcase: { width: 70, height: 100 },
 } as const;
 

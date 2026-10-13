@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { findInvariantViolations, type MoveIntent, type PlayerView } from '@ukbj/game-engine';
+import { findInvariantViolations, SUITS, type CardPlay, type MoveIntent, type PlayerView } from '@ukbj/game-engine';
 import { createEasyBot, type Bot } from '@ukbj/game-bots';
 import {
+  addAce,
   buildPlay,
   canArmLastCard,
+  selectableCardIds,
+  selectionState,
+  tapCard,
   HUMAN_ID,
   MatchController,
   PACING,
@@ -14,6 +18,36 @@ import {
 
 type HumanPolicy = (view: PlayerView, step: number) => MoveIntent | null;
 
+/**
+ * Plays a turn exactly as a person would in the app: tap lit cards to build a
+ * sequence (choosing a suit when an Ace is tapped), back off the last card if the
+ * sequence can't end there, then press Play — or Draw / Pass when nothing is lit.
+ */
+export function uiTurn(view: PlayerView, step: number, armed: boolean): MoveIntent {
+  let sel: CardPlay[] = [];
+  for (let k = 0; k < 14; k++) {
+    const opts = [...selectableCardIds(view, sel)].sort();
+    const state = selectionState(view, sel);
+    if (opts.length === 0 || (state.kind === 'ready' && (step + k) % 3 === 0)) break;
+    const card = view.hand.find((c) => c.id === opts[(step * 7 + k) % opts.length])!;
+    const r = tapCard(view, sel, card);
+    if (r.kind === 'chooseSuit') sel = addAce(sel, card, SUITS[(step + k) % 4]!);
+    else if (r.kind === 'selection') sel = r.selection;
+    else throw new Error(`lit card was rejected: ${r.reason}`);
+  }
+  while (sel.length > 0 && selectionState(view, sel).kind !== 'ready') {
+    const last = view.hand.find((c) => c.id === sel[sel.length - 1]!.cardId)!;
+    const r = tapCard(view, sel, last);
+    if (r.kind !== 'selection') throw new Error('tapping a selected card must remove it');
+    sel = r.selection;
+  }
+  const move = sel.length ? buildPlay(view, sel, armed && canArmLastCard(view, sel)) : null;
+  if (move) return move;
+  if (view.legalMoves.some((m) => m.type === 'PASS')) return { type: 'PASS' };
+  if (view.legalMoves.some((m) => m.type === 'DRAW')) return { type: 'DRAW' };
+  throw new Error(`no UI move available: ${JSON.stringify(view.legalMoves)}`);
+}
+
 /** Random legal play, sometimes forgets Last Card, challenges when possible. */
 const randomHuman = (forgetEvery = 3): HumanPolicy => (view, step) => {
   const moves = view.legalMoves;
@@ -21,9 +55,8 @@ const randomHuman = (forgetEvery = 3): HumanPolicy => (view, step) => {
     return moves.find((m) => m.type === 'CHALLENGE_LAST_CARD' || (m.type === 'DECLARE_LAST_CARD' && step % 2 === 0)) ?? null;
   }
   if (view.currentPlayerId !== view.viewerId) return null;
-  const plays = [...playableCardIds(view)];
-  if (plays.length) return buildPlay(view, plays[step % plays.length]!, step % forgetEvery !== 0);
-  return moves.find((m) => m.type === 'DRAW') ?? moves.find((m) => m.type === 'PASS') ?? null;
+  void moves;
+  return uiTurn(view, step, step % forgetEvery !== 0);
 };
 
 interface RunResult {
@@ -108,8 +141,7 @@ describe('MatchController — planning', () => {
     // Advance until a bot is to move.
     for (let i = 0; i < 50 && m.plan(PACING.normal).kind === 'human'; i++) {
       const v = m.view();
-      const play = [...playableCardIds(v)][0];
-      m.submitHuman(play ? buildPlay(v, play, true)! : { type: 'DRAW' });
+      m.submitHuman(uiTurn(v, i, true));
       if (m.view().drawnCardId) m.submitHuman({ type: 'PASS' });
     }
     const p1 = m.plan(PACING.normal);
@@ -160,8 +192,7 @@ describe('MatchController — planning', () => {
           return;
         }
         if (plan.kind === 'human') {
-          const play = [...playableCardIds(v)][0];
-          m.submitHuman(play ? buildPlay(v, play, false)! : v.drawnCardId ? { type: 'PASS' } : { type: 'DRAW' });
+          m.submitHuman(uiTurn(v, step, false));
         } else if (plan.kind !== 'finished') m.runPlan(plan);
       }
     }
@@ -185,8 +216,7 @@ describe('MatchController — planning', () => {
         }
         const plan = m.plan(PACING.normal);
         if (plan.kind === 'human') {
-          const play = [...playableCardIds(v)][0];
-          m.submitHuman(play ? buildPlay(v, play, true)! : v.drawnCardId ? { type: 'PASS' } : { type: 'DRAW' });
+          m.submitHuman(uiTurn(v, step, true));
         } else if (plan.kind !== 'finished') m.runPlan(plan);
       }
     }
@@ -203,16 +233,16 @@ describe('human move helpers', () => {
       for (let step = 0; step < 400 && !m.isFinished(); step++) {
         const v = m.view();
         const plan = m.plan(PACING.fast);
-        if (plan.kind === 'human' && canArmLastCard(v)) {
-          const card = [...playableCardIds(v)][0]!;
-          expect(buildPlay(v, card, false)).toEqual({ type: 'PLAY_CARD', cardId: card });
-          expect(buildPlay(v, card, true)).toEqual({ type: 'PLAY_CARD', cardId: card, declareLastCard: true });
-          expect(buildPlay(v, 'XX', true)).toBeNull();
+        const firstCard = [...playableCardIds(v)].map((id) => v.hand.find((c) => c.id === id)!).find((c) => c.rank !== 'A' && c.rank !== 'Q');
+        const sel: CardPlay[] = firstCard ? [{ cardId: firstCard.id }] : [];
+        if (plan.kind === 'human' && sel.length && canArmLastCard(v, sel)) {
+          expect(buildPlay(v, sel, false)).toEqual({ type: 'PLAY_CARDS', plays: sel });
+          expect(buildPlay(v, sel, true)).toEqual({ type: 'PLAY_CARDS', plays: sel, declareLastCard: true });
+          expect(buildPlay(v, [{ cardId: 'XX' as never }], true)).toBeNull();
           return;
         }
         if (plan.kind === 'human') {
-          const play = [...playableCardIds(v)][0];
-          m.submitHuman(play ? buildPlay(v, play, true)! : v.drawnCardId ? { type: 'PASS' } : { type: 'DRAW' });
+          m.submitHuman(uiTurn(v, step, true));
         } else if (plan.kind !== 'finished') m.runPlan(plan);
       }
     }

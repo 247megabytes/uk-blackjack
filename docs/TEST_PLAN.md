@@ -16,14 +16,19 @@
 | Winning, no finishing on 2/8/K/J (incl. while defending) | `game-engine/test/winning.test.ts` |
 | Recycling, partial draws, MUST_PLAY, stalemate detection/resolution, turn cap | `game-engine/test/exhaustion.test.ts` |
 | Hidden-card protection, event redaction, spectators | `game-engine/test/view.test.ts` |
+| Multi-card sequences: transitions, runs, rank chains, every power applies, covered attacks, defending, Last Card, drawn card | `game-engine/test/sequences.test.ts` |
+| Queen covering, cover rules, Ace covers, mandatory cover, one-card penalty, turn end, next player, hidden penalty card | `game-engine/test/queens.test.ts` |
+| Wild Aces: any-time play, called suit enforcement, invalid suit choices, attacks, finishing, sequences, A as 1 | `game-engine/test/aces.test.ts` |
 | Easy bot legality, bot isolation, deterministic and bulk seeded simulations (2–6 players × 200 games) | `game-bots/test/simulation.test.ts` |
 | Match controller (pacing, memoised bot decisions, Last Card grace/escape/catch, stale plans), 750 matches through the UI drive loop | `apps/mobile/test/match.test.ts` |
-| Banners, status lines, seat layout, hand rows/sorting | `apps/mobile/test/presentation.test.ts` |
+| Banners (incl. v1.1 events), status lines, seat layout, hand rows/sorting | `apps/mobile/test/presentation.test.ts` |
+| Tap-to-build selection, lit next cards, undo, suit picker flow, Queen prompt and penalty warning, Last Card arming, attack preview | `apps/mobile/test/selection.test.ts` |
 
 ## Mobile UI checks
 - Typecheck: `npm run typecheck:mobile` (after `npm install`).
 - Manual device pass (Expo Go): see `apps/mobile/README.md`. Checklist: deal with 1 and 5 bots; play a
-  2 and a black Jack stack; block with a red Jack; reverse and skip with 2 players; forget Last Card and
+  2 and a black Jack stack; block with a red Jack; build a 3-card run; cover a Queen; get the Queen
+  pick-up; call a suit with an Ace and see the chip; reverse and skip with 2 players; forget Last Card and
   get caught; catch a bot; win, lose, rematch; leave mid-game; toggle haptics and highlighting.
 
 ## Simulation invariants (checked after every accepted action)
@@ -32,8 +37,8 @@ increments by exactly 1, replaying the action is a no-op, attack state matches t
 state is consistent, winners have empty hands.
 
 ## Test quality check
-Mutation spot-checks were run: disabling red-Jack cancellation, or allowing a finish on a power card, each
-caused 9 tests to fail.
+Mutation spot-checks: v1 — disabling red-Jack cancellation or allowing a power-card finish each failed 9 tests.
+v1.1 — disabling Queen cover (3), cross-suit runs (2), non-wild Aces (10), Aces finishing (3), no Queen penalty (4).
 
 ## Extended soak
 `npm run simulate -- 2000 6` runs 2,000 seeded games with 6 Easy bots and reports violations.
