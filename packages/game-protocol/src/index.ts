@@ -5,9 +5,9 @@
  * session and builds the engine GameAction itself (see toGameAction).
  */
 
-import type { GameAction, GameError, MoveIntent, PlayerId, PlayerView } from '@ukbj/game-engine';
+import { SYSTEM_PLAYER_ID, type GameAction, type GameError, type GameMode, type MoveIntent, type PlayerId, type PlayerView, type TournamentView } from '@ukbj/game-engine';
 
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 
 // ---------------------------------------------------------------------------
 // Client → server
@@ -17,7 +17,11 @@ export type ClientMessage =
   | { readonly type: 'move'; readonly actionId: string; readonly expectedVersion: number; readonly move: MoveIntent }
   | { readonly type: 'setReady'; readonly ready: boolean }
   | { readonly type: 'startGame' }
-  | { readonly type: 'requestRematch' };
+  | { readonly type: 'requestRematch' }
+  /** Leave the game or tournament for good (forfeit). */
+  | { readonly type: 'leave' }
+  /** Host: deal the next Knockouts round once everyone has seen the round results. */
+  | { readonly type: 'nextRound' };
 
 // ---------------------------------------------------------------------------
 // Server → client
@@ -34,6 +38,8 @@ export interface LobbySeat {
 
 export interface LobbyState {
   readonly inviteCode: string;
+  /** 'classic' or Knockouts (a tournament of knockout rounds). */
+  readonly mode: GameMode | 'knockouts';
   readonly seats: readonly LobbySeat[];
   readonly maxPlayers: number;
 }
@@ -41,6 +47,8 @@ export interface LobbyState {
 export type ServerMessage =
   | { readonly type: 'lobby'; readonly lobby: LobbyState }
   | { readonly type: 'view'; readonly view: PlayerView; readonly turnDeadline: number | null }
+  | { readonly type: 'tournament'; readonly tournament: TournamentView; readonly turnDeadline: number | null }
+  | { readonly type: 'playerLeft'; readonly playerId: PlayerId; readonly reason: 'left' | 'disconnected' }
   | { readonly type: 'actionRejected'; readonly actionId: string; readonly error: GameError }
   | { readonly type: 'protocolError'; readonly message: string };
 
@@ -54,12 +62,20 @@ export function toGameAction(playerId: PlayerId, msg: Extract<ClientMessage, { t
     case 'DRAW':
       return { ...base, type: 'DRAW' };
     case 'PASS':
-      return { ...base, type: 'PASS' };
+      return { ...base, type: 'PASS' }; // retired in v1.2: the engine rejects it
     case 'DECLARE_LAST_CARD':
       return { ...base, type: 'DECLARE_LAST_CARD' };
     case 'CHALLENGE_LAST_CARD':
       return { ...base, type: 'CHALLENGE_LAST_CARD', targetPlayerId: m.targetPlayerId };
   }
+}
+
+/**
+ * Server-side: a player who leaves, or whose connection is lost past the grace period,
+ * forfeits. The server issues the action as SYSTEM_PLAYER_ID.
+ */
+export function forfeitAction(playerId: PlayerId, actionId: string): GameAction {
+  return { type: 'FORFEIT', playerId: SYSTEM_PLAYER_ID, targetPlayerId: playerId, actionId };
 }
 
 // ---------------------------------------------------------------------------

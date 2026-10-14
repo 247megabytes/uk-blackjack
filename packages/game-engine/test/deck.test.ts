@@ -88,8 +88,10 @@ describe('dealing', () => {
 
   it('records the ruleset id and schema version', () => {
     const s = startGame({ seed: 1, players: seats(2) });
-    expect(s.rulesetId).toBe('uk-classic-v1.1');
-    expect(s.schemaVersion).toBe(2);
+    expect(s.rulesetId).toBe('uk-classic-v1.2');
+    expect(s.schemaVersion).toBe(3);
+    expect(s.mode).toBe('classic');
+    expect(s.players.every((p) => p.status === 'active')).toBe(true);
     expect(s.activeSuit).toBeNull();
   });
 });

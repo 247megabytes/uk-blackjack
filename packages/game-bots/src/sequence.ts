@@ -18,7 +18,8 @@ export function contextFromView(view: PlayerView): PlayContext {
     top: view.topCard,
     activeSuit: view.activeSuit,
     pendingAttack: view.pendingAttack,
-    drawnCardId: view.drawnCardId,
+    drawnCardId: null,
+    declaredLastCard: view.players.find((p) => p.id === view.viewerId)?.declaredLastCard ?? false,
   };
 }
 
@@ -47,7 +48,7 @@ export function randomSequence(ctx: PlayContext, first: Card, rng: BotRandom, op
 
   const search = (prefix: CardPlay[]): CardPlay[] | null => {
     if (++nodes > maxNodes) return null;
-    const canStop = checkPlays(ctx, prefix) === null;
+    const canStop = checkPlays(ctx, prefix, true) === null; // a go-out is submitted with Last Card declared
     const options = shuffle(nextCardOptions(ctx, prefix), rng);
     const extendFirst = options.length > 0 && (!canStop || rng.chance(opts.continueChance));
     if (canStop && !extendFirst) return prefix;
@@ -58,6 +59,7 @@ export function randomSequence(ctx: PlayContext, first: Card, rng: BotRandom, op
     return canStop ? prefix : null;
   };
 
+  // An Ace ends the sequence (nextCardOptions offers nothing after it).
   return search([asPlay([], first)]) ?? minimalPlayFrom(ctx, first, first.rank === 'A' ? pickSuit([], first) : undefined) ?? [];
 }
 

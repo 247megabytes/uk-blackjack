@@ -7,6 +7,7 @@ export {
   findPlayerIndex,
   currentPlayer,
   drawableCount,
+  activePlayerCount,
   matchesTop,
   canAnswerAttack,
   isCardPlayable,
@@ -21,6 +22,8 @@ export {
   effectiveTopSuit,
   hasLegalPlay,
   isFinishingRestricted,
+  isGoingOut,
+  isPowerCard,
   isLegalFirstCard,
   isLegalStep,
   isRunStep,
@@ -42,6 +45,7 @@ export {
   declareLastCard,
   challengeLastCard,
   closeLastCardWindow,
+  forfeitPlayer,
   checkWinner,
   recycleDiscardPile,
   countAllCards,
@@ -50,3 +54,22 @@ export type { ActionResult, CreateGameOptions, PlayerSeat, WinnerInfo } from './
 export { getPlayerView, redactEvent } from './view';
 export type { PlayerView, PublicPlayer } from './view';
 export { findInvariantViolations } from './invariants';
+export {
+  createTournament,
+  applyTournamentAction,
+  getTournamentView,
+  tournamentStandings,
+  expectedTotalRounds,
+  isFinalRound,
+} from './tournament';
+export type {
+  CreateTournamentOptions,
+  Elimination,
+  EliminationReason,
+  RoundSummary,
+  TournamentAction,
+  TournamentPhase,
+  TournamentResult,
+  TournamentState,
+  TournamentView,
+} from './tournament';

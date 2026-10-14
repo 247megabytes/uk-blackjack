@@ -105,11 +105,10 @@ describe('Queen penalty — cannot cover', () => {
 });
 
 describe('Queens after drawing', () => {
-  it('a drawn Queen may be played with its cover, but nothing beyond the cover', () => {
+  it('v1.2: a drawn Queen waits for the next turn (picking up ends the turn)', () => {
     const s = act(scenario({ hands: [['6H', '7H', '3C'], ['4D', '5D']], top: '9H', drawPile: ['QH'], leftovers: 'discard' }), draw('p1'));
-    expect(s.turn.drawnCardId).toBe('QH');
-    expect(reject(s, play('p1', 'QH'))).toBe('QUEEN_MUST_BE_COVERED');
-    expect(reject(s, seq('p1', ['QH', '6H', '7H']))).toBe('ONLY_DRAWN_CARD_PLAYABLE');
-    expect(top(act(s, seq('p1', ['QH', '6H'])))).toBe('6H');
+    expect(s.turn.drawnCardId).toBeNull();
+    expect(current(s)).toBe('p2');
+    expect(reject(s, seq('p1', ['QH', '6H']))).toBe('NOT_YOUR_TURN');
   });
 });

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { checkWinner, getLegalMoves } from '@ukbj/game-engine';
-import { act, draw, play, reject, scenario } from './helpers';
+import { act, current, draw, play, reject, scenario } from './helpers';
 
 describe('winning conditions', () => {
   it('playing a final normal card wins', () => {
-    const s = act(scenario({ hands: [['5H'], ['3D', '4D']], top: '9H' }), play('p1', '5H'));
+    const s = act(scenario({ hands: [['5H'], ['3D', '4D']], top: '9H', declared: [true, false] }), play('p1', '5H'));
     expect(s.phase).toBe('finished');
     expect(checkWinner(s)).toEqual({ winnerId: 'p1', endReason: 'win' });
     expect(s.events.at(-1)).toMatchObject({ type: 'GAME_WON', playerId: 'p1' });
@@ -41,18 +41,19 @@ describe('winning conditions', () => {
     expect(reject(j, play('p2', 'JH'))).toBe('CANNOT_FINISH_ON_POWER_CARD');
   });
 
-  it('holding only a power card, the player must draw instead and may play the drawn card', () => {
-    const s0 = scenario({ hands: [['KH'], ['3D', '4D']], top: '9H', drawPile: ['5H'], leftovers: 'discard' });
+  it('holding only a power card, the player must draw; the drawn card is playable next turn', () => {
+    const s0 = scenario({ hands: [['KH'], ['3D', '4D']], top: '9H', drawPile: ['6D', '5H'], leftovers: 'discard' });
     expect(getLegalMoves(s0, 'p1')).toEqual([{ type: 'DRAW' }, { type: 'DECLARE_LAST_CARD' }]);
     const s1 = act(s0, draw('p1'));
-    expect(s1.turn.drawnCardId).toBe('5H');
-    const s2 = act(s1, play('p1', '5H', true)); // back down to one card (KH), declared
+    expect(s1.turn.drawnCardId).toBeNull();
+    expect(current(s1)).toBe('p2');
+    const s2 = act(act(s1, draw('p2')), play('p1', '5H', true)); // back down to one card (KH), declared
     expect(s2.phase).toBe('playing');
     expect(s2.players[0]!.declaredLastCard).toBe(true);
   });
 
   it('no further actions are accepted after a win', () => {
-    const s = act(scenario({ hands: [['5H'], ['3D', '4D']], top: '9H' }), play('p1', '5H'));
+    const s = act(scenario({ hands: [['5H'], ['3D', '4D']], top: '9H' }), play('p1', '5H', true));
     expect(reject(s, draw('p2'))).toBe('GAME_OVER');
     expect(getLegalMoves(s, 'p2')).toEqual([]);
   });

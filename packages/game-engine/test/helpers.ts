@@ -9,8 +9,10 @@ import {
   type Card,
   type Direction,
   type GameAction,
+  type GameMode,
   type GameState,
   type PendingAttack,
+  type PlayerStatus,
   type Suit,
 } from '@ukbj/game-engine';
 
@@ -30,6 +32,11 @@ export interface Scenario {
   pendingAttack?: PendingAttack | null;
   drawnCardId?: string | null;
   activeSuit?: Suit | null;
+  mode?: GameMode;
+  /** Per-player status (default all active); non-active players must have empty hands. */
+  statuses?: PlayerStatus[];
+  finishOrder?: string[];
+  declared?: boolean[];
 }
 
 /**
@@ -47,7 +54,8 @@ export function scenario(s: Scenario): GameState {
     id: `p${i + 1}`,
     name: `Player ${i + 1}`,
     hand: hand.map(take),
-    declaredLastCard: false,
+    declaredLastCard: s.declared?.[i] ?? false,
+    status: s.statuses?.[i] ?? ('active' as PlayerStatus),
   }));
   const top = take(s.top);
   const under = (s.discardUnder ?? []).map(take);
@@ -59,6 +67,7 @@ export function scenario(s: Scenario): GameState {
     schemaVersion: STATE_SCHEMA_VERSION,
     rulesetId: RULESET_ID,
     rules: UK_CLASSIC_V1,
+    mode: s.mode ?? 'classic',
     gameId: 'test',
     version: 1,
     rngState: 12345,
@@ -75,6 +84,8 @@ export function scenario(s: Scenario): GameState {
     turnNumber: 1,
     winnerId: null,
     endReason: null,
+    finishOrder: s.finishOrder ?? [],
+    eliminatedId: null,
     processedActionIds: [],
     events: [],
   };
@@ -83,7 +94,8 @@ export function scenario(s: Scenario): GameState {
 let n = 0;
 export const nextId = (): string => `t${++n}`;
 
-type Move = Omit<GameAction, 'actionId'> & { actionId?: string };
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+type Move = DistributiveOmit<GameAction, 'actionId'> & { actionId?: string };
 
 /** Applies an action and throws with the error code if it was rejected. */
 export function act(state: GameState, action: Move): GameState {

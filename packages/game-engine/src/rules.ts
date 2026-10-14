@@ -1,5 +1,5 @@
 /**
- * Rule predicates and legal-move generation for uk-classic-v1.1.
+ * Rule predicates and legal-move generation for uk-classic-v1.2.
  * Card-level rules live in ./sequence (shared with bots and the UI).
  */
 
@@ -21,20 +21,25 @@ export function currentPlayer(state: GameState): PlayerState {
   return p;
 }
 
+/** Players still holding cards and taking turns. */
+export function activePlayerCount(state: GameState): number {
+  return state.players.reduce((n, p) => n + (p.status === 'active' ? 1 : 0), 0);
+}
+
 /** Cards that could still be drawn (draw pile + recyclable discards beneath the top card). */
 export function drawableCount(state: GameState): number {
   return state.drawPile.length + Math.max(0, state.discardPile.length - 1);
 }
 
-/** The rules context for `player` acting now. The drawn-card limit applies only to the current player. */
+/** The rules context for `player` acting now. */
 export function playContext(state: GameState, player: PlayerState): PlayContext {
-  const isCurrent = state.players[state.currentPlayerIndex]?.id === player.id;
   return {
     hand: player.hand,
     top: topCard(state) ?? null,
     activeSuit: state.activeSuit,
     pendingAttack: state.pendingAttack,
-    drawnCardId: isCurrent ? state.turn.drawnCardId : null,
+    drawnCardId: null,
+    declaredLastCard: player.declaredLastCard,
   };
 }
 
@@ -45,7 +50,7 @@ export function matchesTop(card: Card, top: Card | undefined, activeSuit: GameSt
 
 /** Can `card` legally answer the pending attack? */
 export function canAnswerAttack(card: Card, attack: PendingAttack): boolean {
-  return attack.kind === 'two' ? card.rank === '2' : card.rank === 'J';
+  return attack.kind === 'two' ? card.rank === '2' || (card.rank === 'J' && (card.suit === 'H' || card.suit === 'D')) : card.rank === 'J';
 }
 
 /** Can `card` start a complete legal play for `player` right now? */
@@ -75,6 +80,7 @@ export function getLegalMoves(state: GameState, playerId: PlayerId): MoveIntent[
   const idx = findPlayerIndex(state, playerId);
   if (idx < 0) return [];
   const player = state.players[idx]!;
+  if (player.status !== 'active') return [];
 
   if (state.phase === 'lastCardWindow' && state.lastCardWindow) {
     const target = state.lastCardWindow.playerId;
@@ -101,18 +107,19 @@ export function getLegalMoves(state: GameState, playerId: PlayerId): MoveIntent[
     }
   }
   const hasPlay = moves.length > 0;
-  if (state.turn.drawnCardId) {
-    moves.push({ type: 'PASS' });
-    return moves;
-  }
   if (!(hasPlay && drawableCount(state) === 0)) moves.push({ type: 'DRAW' });
   if (canDeclare) moves.push({ type: 'DECLARE_LAST_CARD' });
   return moves;
 }
 
-/** Builds a PLAY_CARDS intent, declaring Last Card when the play leaves exactly one card. */
+/**
+ * Builds a PLAY_CARDS intent, declaring Last Card when the play leaves one card — or
+ * none: a play that empties the hand is refused without a declaration (v1.2), so going
+ * out always declares regardless of `declare`.
+ */
 export function playMove(plays: readonly CardPlay[], handSize: number, declare = true): MoveIntent {
-  return handSize - plays.length === 1 && declare
+  const left = handSize - plays.length;
+  return left === 0 || (left === 1 && declare)
     ? { type: 'PLAY_CARDS', plays, declareLastCard: true }
     : { type: 'PLAY_CARDS', plays };
 }

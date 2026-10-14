@@ -34,9 +34,22 @@ describe('multi-card sequences — legal transitions', () => {
     expect(reject(scenario({ hands: [['8S', '9H', '3D'], ['4C']], top: '8H' }), seq('p1', ['8S', '9H']))).toBe('INVALID_SEQUENCE');
   });
 
-  it('rejects descending runs and runs past 10 (Jack/Queen/King are not numerical)', () => {
-    expect(reject(scenario({ hands: [['9S', '8S', '3D'], ['4C']], top: '9H' }), seq('p1', ['9S', '8S']))).toBe('INVALID_SEQUENCE');
+  it('v1.2: runs go down as well as up (7♠ 6♠ 5♠ and 5♠ 6♠ 7♠)', () => {
+    const down = act(scenario({ hands: [['7S', '6S', '5S', '3D'], ['4C']], top: '7H' }), seq('p1', ['7S', '6S', '5S']));
+    expect(top(down)).toBe('5S');
+    const up = act(scenario({ hands: [['5S', '6S', '7S', '3D'], ['4C']], top: '5H' }), seq('p1', ['5S', '6S', '7S']));
+    expect(top(up)).toBe('7S');
+  });
+
+  it('v1.2: descending runs mix with same-rank steps (6♠ 5♠ 5♦ 4♦)', () => {
+    const s = act(scenario({ hands: [['6S', '5S', '5D', '4D', '9C'], ['4C']], top: '6H' }), seq('p1', ['6S', '5S', '5D', '4D']));
+    expect(top(s)).toBe('4D');
+  });
+
+  it('rejects jumps and runs past 10 (Jack/Queen/King are not numerical)', () => {
+    expect(reject(scenario({ hands: [['9S', '7S', '3D'], ['4C']], top: '9H' }), seq('p1', ['9S', '7S']))).toBe('INVALID_SEQUENCE');
     expect(reject(scenario({ hands: [['10S', 'JS', '3D'], ['4C']], top: '10H' }), seq('p1', ['10S', 'JS']))).toBe('INVALID_SEQUENCE');
+    expect(reject(scenario({ hands: [['JS', '10S', '3D'], ['4C']], top: 'JH' }), seq('p1', ['JS', '10S']))).toBe('INVALID_SEQUENCE');
   });
 
   it('validates every transition, not just the first card', () => {
@@ -61,11 +74,52 @@ describe('multi-card sequences — legal transitions', () => {
   });
 });
 
-describe('multi-card sequences — power cards (every power applies)', () => {
-  it('an 8 inside a run still skips: 7♠ 8♠ 9♠ skips the next player', () => {
+describe('multi-card sequences — power cards (v1.2: only the final power block applies)', () => {
+  it('an 8 covered by a later card does nothing: 7♠ 8♠ 9♠ skips nobody', () => {
     const s = act(scenario({ hands: [['7S', '8S', '9S', '3C', '10D'], ['4D'], ['4H'], ['6C']], top: '7H' }), seq('p1', ['7S', '8S', '9S']));
+    expect(current(s)).toBe('p2');
+    expect(s.events.filter((e) => e.type === 'PLAYER_SKIPPED')).toHaveLength(0);
+    expect(s.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ playerId: 'p1', cards: [{ id: '8S' }] });
+  });
+
+  it('an 8 that ends the sequence skips: 9♠ 8♠ skips the next player', () => {
+    const s = act(scenario({ hands: [['9S', '8S', '3C', '10D'], ['4D'], ['4H'], ['6C']], top: '9H' }), seq('p1', ['9S', '8S']));
     expect(current(s)).toBe('p3');
+  });
+
+  it('stacked 2s covered by a normal card are all cancelled (3♠ 2♠ 2♣ 3♣)', () => {
+    const s = act(scenario({ hands: [['3S', '2S', '2C', '3C', '9D'], ['4D'], ['4H']], top: '3H' }), seq('p1', ['3S', '2S', '2C', '3C']));
+    expect(s.pendingAttack).toBeNull();
+    expect(s.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: '2S' }, { id: '2C' }] });
+  });
+
+  it('a stacked power block at the end all counts even after normal cards: 6♠ 7♠ 8♠ 8♥ skips two', () => {
+    const s = act(scenario({ hands: [['6S', '7S', '8S', '8H', '3C', '10D'], ['4D'], ['4H'], ['6C']], top: '6H' }), seq('p1', ['6S', '7S', '8S', '8H']));
+    expect(current(s)).toBe('p4');
+    expect(s.events.some((e) => e.type === 'POWER_COVERED')).toBe(false);
+  });
+
+  it('only the final block counts: in 8♠ 9♠ 9♦ 8♦ the first 8 is covered, the last one skips', () => {
+    const s = act(scenario({ hands: [['8S', '9S', '9D', '8D', '3C', '10H'], ['4D'], ['4H'], ['6C']], top: '8C' }), seq('p1', ['8S', '9S', '9D', '8D']));
+    expect(current(s)).toBe('p3'); // one skip, from 8♦ only
     expect(s.events.filter((e) => e.type === 'PLAYER_SKIPPED')).toHaveLength(1);
+  });
+
+  it('an Ace covering a King cancels the reverse (an Ace counts as a normal card for covering)', () => {
+    const s = act(scenario({ hands: [['KS', 'AS', '3C', '10D'], ['4D'], ['4H']], top: 'KH' }), seq('p1', ['KS', 'AS>D']));
+    expect(s.direction).toBe(1);
+    expect(current(s)).toBe('p2');
+    expect(s.activeSuit).toBe('D');
+  });
+
+  it('three final 8s with four players skip everyone else: the player goes again', () => {
+    const s = act(scenario({ hands: [['8S', '8H', '8D', '3C', '10D'], ['4D'], ['4H'], ['6C']], top: '8C' }), seq('p1', ['8S', '8H', '8D']));
+    expect(current(s)).toBe('p1');
+    expect(s.events.filter((e) => e.type === 'PLAYER_SKIPPED')).toHaveLength(3);
+  });
+
+  it('a power card can only be followed by its own rank (or a 2 by a 3 / an Ace), so final blocks are same-rank', () => {
+    expect(reject(scenario({ hands: [['8S', 'KS', '3C'], ['4D']], top: '8H' }), seq('p1', ['8S', 'KS']))).toBe('INVALID_SEQUENCE');
   });
 
   it('two 8s skip two players', () => {
@@ -97,11 +151,11 @@ describe('multi-card sequences — power cards (every power applies)', () => {
   it('covering your own 2 with a normal card cancels its power (confirmed)', () => {
     const s = act(scenario({ hands: [['2S', '3S', '4S', '9C', '10D'], ['5D', '6D'], ['5H']], top: '2D' }), seq('p1', ['2S', '3S', '4S']));
     expect(s.pendingAttack).toBeNull();
-    expect(s.events.some((e) => e.type === 'ATTACK_NEUTRALISED' && e.kind === 'two' && e.amount === 2)).toBe(true);
+    expect(s.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: '2S' }] });
     expect(current(s)).toBe('p2');
   });
 
-  it('two players: one 8 in a run gives another turn; two skips pass to the opponent', () => {
+  it('two players: one final 8 gives another turn; two skips pass to the opponent', () => {
     const one = act(scenario({ hands: [['7S', '8S', '3C', '10D'], ['4D', '5D']], top: '7H' }), seq('p1', ['7S', '8S']));
     expect(current(one)).toBe('p1');
     const two = act(scenario({ hands: [['8S', '8H', '3C', '10D'], ['4D', '5D']], top: '8D' }), seq('p1', ['8S', '8H']));
@@ -111,7 +165,7 @@ describe('multi-card sequences — power cards (every power applies)', () => {
   it('a final power card still cannot be the finishing card of a sequence', () => {
     const s = scenario({ hands: [['7S', '8S'], ['4D']], top: '7H' });
     expect(reject(s, seq('p1', ['7S', '8S']))).toBe('CANNOT_FINISH_ON_POWER_CARD');
-    const win = act(scenario({ hands: [['7S', '8S', '9S'], ['4D']], top: '7H' }), seq('p1', ['7S', '8S', '9S']));
+    const win = act(scenario({ hands: [['7S', '8S', '9S'], ['4D']], top: '7H' }), seq('p1', ['7S', '8S', '9S'], true));
     expect(win.winnerId).toBe('p1');
   });
 });
@@ -149,11 +203,11 @@ describe('multi-card sequences — turn endings and Last Card', () => {
     expect(s.phase).toBe('lastCardWindow');
   });
 
-  it('after drawing, only the drawn card may be played — never a sequence from it', () => {
-    const s = act(scenario({ hands: [['3C', '6H'], ['4D', '5D']], top: '9H', drawPile: ['5H'], leftovers: 'discard' }), draw('p1'));
-    expect(s.turn.drawnCardId).toBe('5H');
-    expect(reject(s, seq('p1', ['5H', '6H']))).toBe('ONLY_DRAWN_CARD_PLAYABLE');
-    expect(top(act(s, play('p1', '5H')))).toBe('5H');
+  it('v1.2: a drawn card is only playable next turn — then as part of any sequence', () => {
+    let s = act(scenario({ hands: [['3C', '6H'], ['4D', '5D']], top: '9H', drawPile: ['5H'], leftovers: 'discard' }), draw('p1'));
+    expect(current(s)).toBe('p2');
+    s = act(s, draw('p2'));
+    expect(top(act(s, seq('p1', ['5H', '6H'])))).toBe('6H');
   });
 
   it('a whole sequence is one action: one version bump, ordered CARD_PLAYED events plus SEQUENCE_PLAYED', () => {

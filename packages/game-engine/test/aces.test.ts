@@ -82,21 +82,24 @@ describe('wild Aces — attacks, Queens and finishing', () => {
 });
 
 describe('wild Aces in sequences', () => {
-  it('may follow any card; the next card must follow the chosen suit (7♠ → A♦→♥ → 5♥)', () => {
+  it('v1.2: may end any sequence (7♠ → A♦→♥), but nothing may follow an Ace', () => {
     const s = scenario({ hands: [['7S', 'AD', '5H', '5S', '3C'], ['4D']], top: '7H' });
-    expect(top(act(s, seq('p1', ['7S', 'AD>H', '5H'])))).toBe('5H');
-    expect(reject(s, seq('p1', ['7S', 'AD>H', '5S']))).toBe('INVALID_SEQUENCE');
+    const after = act(s, seq('p1', ['7S', 'AD>H']));
+    expect(top(after)).toBe('AD');
+    expect(after.activeSuit).toBe('H');
+    expect(current(after)).toBe('p2');
+    expect(reject(s, seq('p1', ['7S', 'AD>H', '5H']))).toBe('ACE_MUST_BE_LAST');
   });
 
-  it('counts as 1 in a run: A♠ → 2♠ → 3♠', () => {
-    const s = act(scenario({ hands: [['AS', '2S', '3S', '9C'], ['4D']], top: '7H' }), seq('p1', ['AS>S', '2S', '3S']));
-    expect(top(s)).toBe('3S');
-    expect(s.pendingAttack).toBeNull(); // the 2 was covered by the 3
+  it('v1.2: counts as 1 at the END of a descending run (3♠ → 2♠ → A♠), never mid-sequence', () => {
+    const s = act(scenario({ hands: [['3S', '2S', 'AS', '9C'], ['4D']], top: '3H' }), seq('p1', ['3S', '2S', 'AS>D']));
+    expect(top(s)).toBe('AS');
+    expect(s.activeSuit).toBe('D');
+    expect(s.pendingAttack).toBeNull(); // the 2 was covered by the Ace
+    expect(reject(scenario({ hands: [['AS', '2S', '3S', '9C'], ['4D']], top: '7H' }), seq('p1', ['AS>S', '2S', '3S']))).toBe('ACE_MUST_BE_LAST');
   });
 
-  it('Ace → Ace is allowed; the last Ace’s suit stands', () => {
-    const s = act(scenario({ hands: [['AS', 'AD', '3C', '10D'], ['4D']], top: '7H' }), seq('p1', ['AS>H', 'AD>C']));
-    expect(s.activeSuit).toBe('C');
-    expect(current(s)).toBe('p2');
+  it('v1.2: Ace → Ace is refused (the first Ace already ended the turn)', () => {
+    expect(reject(scenario({ hands: [['AS', 'AD', '3C', '10D'], ['4D']], top: '7H' }), seq('p1', ['AS>H', 'AD>C']))).toBe('ACE_MUST_BE_LAST');
   });
 });

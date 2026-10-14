@@ -25,7 +25,11 @@ export type GameErrorCode =
   | 'INVALID_SEQUENCE'
   | 'QUEEN_MUST_BE_COVERED'
   | 'SUIT_CHOICE_REQUIRED'
-  | 'INVALID_SUIT_CHOICE';
+  | 'INVALID_SUIT_CHOICE'
+  | 'ACE_MUST_BE_LAST'
+  | 'LAST_CARD_NOT_DECLARED'
+  | 'PLAYER_OUT'
+  | 'INVALID_FORFEIT_TARGET';
 
 export interface GameError {
   readonly code: GameErrorCode;

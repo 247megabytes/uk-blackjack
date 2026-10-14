@@ -1,10 +1,10 @@
 import type { Card, CardId, Suit } from './cards';
 
-export const RULESET_ID = 'uk-classic-v1.1' as const;
+export const RULESET_ID = 'uk-classic-v1.2' as const;
 export type RulesetId = typeof RULESET_ID;
 
 /** Bump when the shape of GameState changes in a non-backward-compatible way. */
-export const STATE_SCHEMA_VERSION = 2 as const;
+export const STATE_SCHEMA_VERSION = 3 as const;
 
 export type PlayerId = string;
 export type Direction = 1 | -1; // 1 = clockwise, -1 = anticlockwise
@@ -16,7 +16,7 @@ export type GamePhase =
   | 'playing'
   /** A player just went down to one card without declaring; declare/challenge only. */
   | 'lastCardWindow'
-  /** Game over (win or stalemate). */
+  /** Game over (classic: win, stalemate or forfeit; knockout: the round is complete). */
   | 'finished';
 
 export interface RulesConfig {
@@ -40,12 +40,23 @@ export const UK_CLASSIC_V1: RulesConfig = Object.freeze({
   maxTurns: 1000,
 });
 
+/**
+ * Game mode. A knockout game is ONE round of a Knockouts tournament: players who empty
+ * their hand finish (in order) and the round runs on until a single player holds cards.
+ * The tournament layer (./tournament) chains rounds together.
+ */
+export type GameMode = 'classic' | 'knockout';
+
+/** active = still holding cards and taking turns; finished = emptied their hand (knockout); forfeited = left / disconnected. */
+export type PlayerStatus = 'active' | 'finished' | 'forfeited';
+
 export interface PlayerState {
   readonly id: PlayerId;
   readonly name: string;
   readonly hand: readonly Card[];
   /** True once the player has announced Last Card for their current single-card hand. */
   readonly declaredLastCard: boolean;
+  readonly status: PlayerStatus;
 }
 
 export type AttackKind = 'two' | 'blackJack';
@@ -57,7 +68,7 @@ export interface PendingAttack {
 }
 
 export interface TurnState {
-  /** Set after the current player draws a single card (not a penalty). */
+  /** Always null since uk-classic-v1.2: picking up ends the turn. Kept for state-shape stability. */
   readonly drawnCardId: CardId | null;
 }
 
@@ -68,12 +79,17 @@ export interface LastCardWindow {
   readonly resumePlayerIndex: number;
 }
 
-export type EndReason = 'win' | 'stalemate';
+/**
+ * win: a player emptied their hand (classic). stalemate: turn cap or deadlock.
+ * forfeit: everyone else left (classic). roundComplete: one player left holding cards (knockout).
+ */
+export type EndReason = 'win' | 'stalemate' | 'forfeit' | 'roundComplete';
 
 export interface GameState {
   readonly schemaVersion: typeof STATE_SCHEMA_VERSION;
   readonly rulesetId: RulesetId;
   readonly rules: RulesConfig;
+  readonly mode: GameMode;
   readonly gameId: string;
   /** Monotonic: increments on every accepted action. Clients send it back to detect staleness. */
   readonly version: number;
@@ -92,8 +108,13 @@ export interface GameState {
   readonly turn: TurnState;
   readonly lastCardWindow: LastCardWindow | null;
   readonly turnNumber: number;
+  /** Classic: the winner. Knockout: the first player to finish the round (null if none did). */
   readonly winnerId: PlayerId | null;
   readonly endReason: EndReason | null;
+  /** Knockout: players who emptied their hand, in finishing order. */
+  readonly finishOrder: readonly PlayerId[];
+  /** Knockout: the player knocked out when the round ended (null while playing, or if a forfeit ended it). */
+  readonly eliminatedId: PlayerId | null;
   /** Action ids already applied (for idempotency). Server-only. */
   readonly processedActionIds: readonly string[];
   /** Append-only event log. Contains hidden information; filter with getPlayerView. */
@@ -131,7 +152,7 @@ export interface DrawAction extends ActionBase {
   readonly type: 'DRAW';
 }
 
-/** End the turn after drawing a playable card you chose not to play. */
+/** Retired in uk-classic-v1.2 (picking up always ends the turn). Always rejected; kept for wire compatibility. */
 export interface PassAction extends ActionBase {
   readonly type: 'PASS';
 }
@@ -150,6 +171,16 @@ export interface CloseLastCardWindowAction extends ActionBase {
   readonly type: 'CLOSE_LAST_CARD_WINDOW';
 }
 
+/**
+ * Leave the game. A player may forfeit themselves; the server (SYSTEM_PLAYER_ID) forfeits
+ * a disconnected player by naming them in targetPlayerId. Their cards are shuffled into
+ * the draw pile and they take no further part (in Knockouts they are eliminated).
+ */
+export interface ForfeitAction extends ActionBase {
+  readonly type: 'FORFEIT';
+  readonly targetPlayerId?: PlayerId;
+}
+
 export const SYSTEM_PLAYER_ID = '__system__';
 
 export type GameAction =
@@ -158,7 +189,8 @@ export type GameAction =
   | PassAction
   | DeclareLastCardAction
   | ChallengeLastCardAction
-  | CloseLastCardWindowAction;
+  | CloseLastCardWindowAction
+  | ForfeitAction;
 
 export type ActionType = GameAction['type'];
 
@@ -182,7 +214,7 @@ export type GameEvent =
   | { readonly type: 'SUIT_CHOSEN'; readonly version: number; readonly playerId: PlayerId; readonly suit: Suit }
   | { readonly type: 'QUEEN_COVERED'; readonly version: number; readonly playerId: PlayerId; readonly queen: Card; readonly cover: Card }
   | { readonly type: 'QUEEN_UNCOVERED'; readonly version: number; readonly playerId: PlayerId; readonly queen: Card }
-  | { readonly type: 'ATTACK_NEUTRALISED'; readonly version: number; readonly playerId: PlayerId; readonly kind: AttackKind; readonly amount: number }
+  | { readonly type: 'POWER_COVERED'; readonly version: number; readonly playerId: PlayerId; readonly cards: readonly Card[] }
   | { readonly type: 'CARDS_DRAWN'; readonly version: number; readonly playerId: PlayerId; readonly cards: readonly Card[]; readonly count: number; readonly requested: number; readonly reason: DrawReason }
   | { readonly type: 'ATTACK_STARTED'; readonly version: number; readonly kind: AttackKind; readonly amount: number }
   | { readonly type: 'ATTACK_STACKED'; readonly version: number; readonly kind: AttackKind; readonly amount: number }
@@ -197,7 +229,17 @@ export type GameEvent =
   | { readonly type: 'LAST_CARD_WINDOW_CLOSED'; readonly version: number; readonly playerId: PlayerId }
   | { readonly type: 'DISCARDS_RECYCLED'; readonly version: number; readonly count: number }
   | { readonly type: 'GAME_WON'; readonly version: number; readonly playerId: PlayerId }
-  | { readonly type: 'STALEMATE'; readonly version: number; readonly winnerId: PlayerId | null };
+  | { readonly type: 'STALEMATE'; readonly version: number; readonly winnerId: PlayerId | null }
+  | { readonly type: 'PLAYER_FINISHED'; readonly version: number; readonly playerId: PlayerId; readonly place: number }
+  | { readonly type: 'PLAYER_FORFEITED'; readonly version: number; readonly playerId: PlayerId; readonly cardsReturned: number; readonly attackCleared: boolean }
+  | {
+      readonly type: 'ROUND_COMPLETE';
+      readonly version: number;
+      readonly finishOrder: readonly PlayerId[];
+      readonly eliminatedId: PlayerId | null;
+      /** last-holder: one player left with cards. stalled: turn cap / deadlock (most cards out). forfeit: a forfeit left ≤1 holder. */
+      readonly reason: 'lastHolder' | 'stalled' | 'forfeit';
+    };
 
 export type DrawReason = 'normal' | 'blackJackPenalty' | 'twoPenalty' | 'lastCardPenalty' | 'queenPenalty';
 

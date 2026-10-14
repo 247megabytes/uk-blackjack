@@ -43,11 +43,20 @@ describe('hidden-card protection', () => {
     }
   });
 
-  it('the drawn card id is only shown to the drawer', () => {
-    let s = scenario({ hands: [['3C', '4C', '6C'], ['5D'], ['6D']], top: '9H', drawPile: ['5H'], leftovers: 'discard' });
+  it('a drawn card is shown only to the drawer (event log), and there is never a pending drawn card', () => {
+    let s = scenario({ hands: [['3C', '4C', '6C'], ['5D', '7D'], ['6D', '8D']], top: '9H', drawPile: ['5H'], leftovers: 'discard' });
     s = act(s, draw('p1'));
-    expect(getPlayerView(s, 'p1').drawnCardId).toBe('5H');
-    expect(getPlayerView(s, 'p2').drawnCardId).toBeNull();
+    expect(getPlayerView(s, 'p1').drawnCardId).toBeNull();
+    expect(getPlayerView(s, 'p1').events.find((e) => e.type === 'CARDS_DRAWN')).toMatchObject({ cards: [{ id: '5H' }] });
+    expect(getPlayerView(s, 'p2').events.find((e) => e.type === 'CARDS_DRAWN')).toMatchObject({ cards: [], count: 1 });
+  });
+
+  it('exposes mode, player status and finishing places', () => {
+    const s = scenario({ hands: [['3C', '4C'], [], ['6D', '8D']], top: '9H', mode: 'knockout', statuses: ['active', 'finished', 'active'], finishOrder: ['p2'] });
+    const v = getPlayerView(s, 'p1');
+    expect(v.mode).toBe('knockout');
+    expect(v.players.map((p) => [p.status, p.place])).toEqual([['active', null], ['finished', 1], ['active', null]]);
+    expect(v.finishOrder).toEqual(['p2']);
   });
 
   it('includes the viewer legal moves and supports incremental events', () => {

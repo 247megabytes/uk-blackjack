@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, checkPlays, getPlayerView, startGame, type GameAction, type PlayerView } from '@ukbj/game-engine';
-import { contextFromView, createEasyBot, simulateGame, type Bot } from '@ukbj/game-bots';
+import { contextFromView, createEasyBot, simulateGame, simulateTournament, type Bot } from '@ukbj/game-bots';
 
 describe('Easy bot', () => {
   it('only ever submits moves the shared rules accept', () => {
@@ -12,7 +12,7 @@ describe('Easy bot', () => {
         const view = getPlayerView(state, id);
         const move = bot.chooseMove(view);
         expect(move).not.toBeNull();
-        if (move!.type === 'PLAY_CARDS') expect(checkPlays(contextFromView(view), move!.plays)).toBeNull();
+        if (move!.type === 'PLAY_CARDS') expect(checkPlays(contextFromView(view), move!.plays, move!.declareLastCard === true)).toBeNull();
         else expect(view.legalMoves.some((m) => m.type === move!.type)).toBe(true);
         const res = applyAction(state, { ...move!, playerId: id, actionId: `${g}-${step}` } as GameAction);
         expect(res.ok).toBe(true);
@@ -74,13 +74,78 @@ describe('seeded bot-versus-bot simulations', () => {
     expect(longest).toBeGreaterThanOrEqual(4);
   });
 
-  it('exercises v1 and v1.1 rule paths across the run', () => {
+  it('exercises v1, v1.1 and v1.2 rule paths across the run', () => {
     const counts: Record<string, number> = {};
     for (let i = 0; i < 100; i++) {
       for (const e of simulateGame({ seed: `cov-${i}`, playerCount: 4 }).finalState.events) counts[e.type] = (counts[e.type] ?? 0) + 1;
     }
-    for (const t of ['ATTACK_STACKED', 'ATTACK_CANCELLED', 'DIRECTION_REVERSED', 'PLAYER_SKIPPED', 'LAST_CARD_WINDOW_OPENED', 'LAST_CARD_CHALLENGED', 'DISCARDS_RECYCLED', 'GAME_WON', 'SEQUENCE_PLAYED', 'QUEEN_COVERED', 'QUEEN_UNCOVERED', 'SUIT_CHOSEN', 'ATTACK_NEUTRALISED']) {
+    for (const t of ['ATTACK_STACKED', 'ATTACK_CANCELLED', 'DIRECTION_REVERSED', 'PLAYER_SKIPPED', 'LAST_CARD_WINDOW_OPENED', 'LAST_CARD_CHALLENGED', 'DISCARDS_RECYCLED', 'GAME_WON', 'SEQUENCE_PLAYED', 'QUEEN_COVERED', 'QUEEN_UNCOVERED', 'SUIT_CHOSEN', 'POWER_COVERED']) {
       expect(counts[t] ?? 0).toBeGreaterThan(0);
     }
+    expect(counts.TURN_PASSED ?? 0).toBe(0); // PASS is retired
+  });
+
+  it('bots always declare when going out, and a red Jack cancels 2 attacks in play', () => {
+    let goOuts = 0;
+    let redJackOnTwos = 0;
+    for (let i = 0; i < 100; i++) {
+      const events = simulateGame({ seed: `v12-${i}`, playerCount: 4 }).finalState.events;
+      events.forEach((e, k) => {
+        if (e.type === 'GAME_WON') {
+          goOuts++;
+          const declared = events.slice(0, k).reverse().find((x) => x.type === 'LAST_CARD_DECLARED' || x.type === 'TURN_STARTED');
+          expect(declared?.type === 'LAST_CARD_DECLARED' || events.slice(0, k).some((x) => x.type === 'LAST_CARD_DECLARED' && x.playerId === e.playerId)).toBe(true);
+        }
+        if (e.type === 'ATTACK_CANCELLED') {
+          const before = events.slice(0, k).reverse().find((x) => x.type === 'ATTACK_STARTED' || x.type === 'ATTACK_STACKED');
+          if (before && (before.type === 'ATTACK_STARTED' || before.type === 'ATTACK_STACKED') && before.kind === 'two') redJackOnTwos++;
+        }
+      });
+    }
+    expect(goOuts).toBe(100);
+    expect(redJackOnTwos).toBeGreaterThan(0);
+  });
+
+  it('classic games with random disconnects (forfeits) stay consistent', () => {
+    let forfeitWins = 0;
+    for (let i = 0; i < 200; i++) {
+      const r = simulateGame({ seed: `ff-${i}`, playerCount: 2 + (i % 5), forfeitChance: 0.01 });
+      if (r.violations.length) throw new Error(`seed ff-${i}: ${r.violations.join('; ')}`);
+      expect(r.finished).toBe(true);
+      if (r.endReason === 'forfeit') forfeitWins++;
+    }
+    expect(forfeitWins).toBeGreaterThan(0);
+  });
+});
+
+describe('Knockouts simulations', () => {
+  it('is deterministic: the same seed produces the same tournament', () => {
+    const a = simulateTournament({ seed: 'ko-repeat', playerCount: 5 });
+    const b = simulateTournament({ seed: 'ko-repeat', playerCount: 5 });
+    expect(a.finalState).toEqual(b.finalState);
+  });
+
+  for (const players of [2, 3, 4, 5, 6]) {
+    it(`${players} players × 60 tournaments: every round valid, one champion, entrants − 1 rounds`, () => {
+      for (let i = 0; i < 60; i++) {
+        const r = simulateTournament({ seed: `kos-${players}-${i}`, playerCount: players });
+        if (r.violations.length) throw new Error(`seed kos-${players}-${i}: ${r.violations.join('; ')}`);
+        expect(r.complete).toBe(true);
+        expect(r.championId).not.toBeNull();
+        expect(r.rounds).toBe(players - 1);
+        expect(r.finalState.eliminated).toHaveLength(players - 1);
+      }
+    });
+  }
+
+  it('tournaments with random disconnects stay consistent and still crown a champion', () => {
+    let forfeits = 0;
+    for (let i = 0; i < 150; i++) {
+      const r = simulateTournament({ seed: `kof-${i}`, playerCount: 2 + (i % 5), forfeitChance: 0.01 });
+      if (r.violations.length) throw new Error(`seed kof-${i}: ${r.violations.join('; ')}`);
+      expect(r.complete).toBe(true);
+      forfeits += r.forfeits;
+    }
+    expect(forfeits).toBeGreaterThan(20);
   });
 });

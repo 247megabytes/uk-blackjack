@@ -9,10 +9,12 @@ import type {
   Direction,
   EndReason,
   GameEvent,
+  GameMode,
   GamePhase,
   MoveIntent,
   PendingAttack,
   PlayerId,
+  PlayerStatus,
   RulesConfig,
   RulesetId,
   GameState,
@@ -25,11 +27,15 @@ export interface PublicPlayer {
   readonly cardCount: number;
   readonly declaredLastCard: boolean;
   readonly seat: number;
+  readonly status: PlayerStatus;
+  /** Knockout: finishing position this round (1 = first out), null if not finished. */
+  readonly place: number | null;
 }
 
 export interface PlayerView {
   readonly rulesetId: RulesetId;
   readonly rules: RulesConfig;
+  readonly mode: GameMode;
   readonly gameId: string;
   readonly version: number;
   readonly phase: GamePhase;
@@ -45,12 +51,14 @@ export interface PlayerView {
   readonly pendingAttack: PendingAttack | null;
   /** Suit chosen with a wild Ace on top of the pile (null = the top card's own suit applies). */
   readonly activeSuit: Suit | null;
-  /** Only populated for the viewer when it is their turn and they just drew. */
+  /** Always null since v1.2 (picking up ends the turn). */
   readonly drawnCardId: CardId | null;
   readonly lastCardWindowPlayerId: PlayerId | null;
   readonly turnNumber: number;
   readonly winnerId: PlayerId | null;
   readonly endReason: EndReason | null;
+  readonly finishOrder: readonly PlayerId[];
+  readonly eliminatedId: PlayerId | null;
   readonly legalMoves: readonly MoveIntent[];
   readonly events: readonly GameEvent[];
 }
@@ -72,6 +80,7 @@ export function getPlayerView(state: GameState, viewerId: PlayerId | null, optio
   return {
     rulesetId: state.rulesetId,
     rules: state.rules,
+    mode: state.mode,
     gameId: state.gameId,
     version: state.version,
     phase: state.phase,
@@ -83,6 +92,8 @@ export function getPlayerView(state: GameState, viewerId: PlayerId | null, optio
       cardCount: p.hand.length,
       declaredLastCard: p.declaredLastCard,
       seat,
+      status: p.status,
+      place: p.status === 'finished' ? state.finishOrder.indexOf(p.id) + 1 : null,
     })),
     currentPlayerId: current ? current.id : '',
     direction: state.direction,
@@ -91,11 +102,13 @@ export function getPlayerView(state: GameState, viewerId: PlayerId | null, optio
     discardPileCount: state.discardPile.length,
     pendingAttack: state.pendingAttack,
     activeSuit: state.activeSuit,
-    drawnCardId: viewer && current && current.id === viewer.id ? state.turn.drawnCardId : null,
+    drawnCardId: null,
     lastCardWindowPlayerId: state.lastCardWindow ? state.lastCardWindow.playerId : null,
     turnNumber: state.turnNumber,
     winnerId: state.winnerId,
     endReason: state.endReason,
+    finishOrder: state.finishOrder,
+    eliminatedId: state.eliminatedId,
     legalMoves: effectiveViewer ? getLegalMoves(state, effectiveViewer) : [],
     events: state.events.filter((e) => e.version > since).map((e) => redactEvent(e, effectiveViewer)),
   };

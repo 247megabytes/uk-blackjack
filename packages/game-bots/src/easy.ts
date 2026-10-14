@@ -17,7 +17,9 @@ export interface EasyBotOptions {
 /**
  * Easy bot: picks a random legal starting card, then randomly extends it into a legal
  * multi-card sequence (covering Queens when it can, choosing a random suit for Aces).
- * Draws only when it has nothing to play. Deliberately forgetful about Last Card.
+ * Draws only when it has nothing to play. Deliberately forgetful about Last Card when
+ * going down to one card, but always declares when playing out its hand (v1.2 refuses
+ * an undeclared go-out).
  * It sees only its own PlayerView and validates every sequence with the engine's rules.
  */
 export function createEasyBot(options: EasyBotOptions): Bot {
@@ -51,13 +53,12 @@ export function createEasyBot(options: EasyBotOptions): Bot {
         const ctx = contextFromView(view);
         const first = view.hand.find((c) => c.id === start.plays[0]!.cardId)!;
         let plays = randomSequence(ctx, first, rng, { continueChance });
-        if (plays.length === 0 || checkPlays(ctx, plays)) plays = [...start.plays]; // never submit an illegal move
+        // Going out is always declared (playMove does that); never submit an illegal move.
+        if (plays.length === 0 || checkPlays(ctx, plays, true)) plays = [...start.plays];
         return playMove(plays, view.hand.length, !rng.chance(forget));
       }
       const draw = moves.find((m) => m.type === 'DRAW');
       if (draw) return draw;
-      const pass = moves.find((m) => m.type === 'PASS');
-      if (pass) return pass;
       return moves.find((m) => m.type === 'DECLARE_LAST_CARD') ?? null;
     },
   };

@@ -85,31 +85,37 @@ describe('drawing cards', () => {
     expect(current(s)).toBe('p2');
   });
 
-  it('a newly drawn playable card may be played immediately', () => {
+  it('v1.2: drawing a playable card still ends the turn — it waits for the next turn', () => {
     const s0 = scenario({ hands: [['3C', '4C'], ['5D', '6D']], top: '9H', drawPile: ['2H'], leftovers: 'discard' });
     const s = act(s0, draw('p1'));
-    expect(current(s)).toBe('p1');
-    expect(s.turn.drawnCardId).toBe('2H');
-    expect(getLegalMoves(s, 'p1')).toEqual([single('2H'), { type: 'PASS' }]);
-    const s2 = act(s, play('p1', '2H'));
-    expect(top(s2)).toBe('2H');
-    expect(s2.pendingAttack).toEqual({ kind: 'two', amount: 2 });
-  });
-
-  it('may decline the drawn playable card by passing', () => {
-    const s0 = scenario({ hands: [['3C', '4C'], ['5D', '6D']], top: '9H', drawPile: ['5H'], leftovers: 'discard' });
-    const s = act(act(s0, draw('p1')), pass('p1'));
     expect(current(s)).toBe('p2');
-    expect(hand(s, 'p1')).toContain('5H');
+    expect(s.turn.drawnCardId).toBeNull();
+    expect(hand(s, 'p1')).toEqual(['3C', '4C', '2H']);
+    expect(reject(s, play('p1', '2H'))).toBe('NOT_YOUR_TURN');
+    expect(s.pendingAttack).toBeNull();
   });
 
-  it('voluntary drawing is allowed, but only the drawn card may be played afterwards', () => {
+  it('v1.2: PASS is never legal (there is no drawn card to decline)', () => {
+    const s0 = scenario({ hands: [['3C', '4C'], ['5D', '6D']], top: '9H', drawPile: ['5H'], leftovers: 'discard' });
+    expect(reject(s0, pass('p1'))).toBe('NOTHING_TO_PASS');
+    const s = act(s0, draw('p1'));
+    expect(reject(s, pass('p2'))).toBe('NOTHING_TO_PASS');
+    expect(getLegalMoves(s, 'p2').some((m) => m.type === 'PASS')).toBe(false);
+  });
+
+  it('voluntary drawing is allowed while holding a playable card, and ends the turn', () => {
     const s0 = scenario({ hands: [['9C', '4C'], ['5D', '6D']], top: '9H', drawPile: ['3H'], leftovers: 'discard' });
     expect(getLegalMoves(s0, 'p1')).toContainEqual({ type: 'DRAW' });
     const s = act(s0, draw('p1'));
-    expect(reject(s, play('p1', '9C'))).toBe('ONLY_DRAWN_CARD_PLAYABLE');
-    expect(reject(s, draw('p1'))).toBe('ALREADY_DRAWN');
-    expect(top(act(s, play('p1', '3H')))).toBe('3H');
+    expect(current(s)).toBe('p2');
+    expect(reject(s, draw('p1'))).toBe('NOT_YOUR_TURN');
+  });
+
+  it('v1.2: taking an attack penalty ends the turn and none of the cards can be played', () => {
+    let s = act(scenario({ hands: [['2H', '5C', '6C'], ['3D', '4D'], ['9S', '9D']], top: '9H', drawPile: ['5H', '2D'], leftovers: 'discard' }), play('p1', '2H'));
+    s = act(s, draw('p2'));
+    expect(hand(s, 'p2')).toEqual(['3D', '4D', '2D', '5H']);
+    expect(current(s)).toBe('p3');
   });
 });
 

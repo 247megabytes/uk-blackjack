@@ -28,12 +28,11 @@ describe('stacking 2s', () => {
     expect(current(s)).toBe('p1');
   });
 
-  it('only 2s may answer a 2 attack — no Jacks, no suit matches', () => {
+  it('only 2s (or a red Jack, v1.2) may answer a 2 attack — no black Jacks, no suit matches', () => {
     const s = act(scenario({ hands: [['2H', ...filler], ['JS', 'JH', '5H', '9C'], ['3C']], top: '9H' }), play('p1', '2H'));
     expect(reject(s, play('p2', 'JS'))).toBe('MUST_ANSWER_ATTACK');
-    expect(reject(s, play('p2', 'JH'))).toBe('MUST_ANSWER_ATTACK');
     expect(reject(s, play('p2', '5H'))).toBe('MUST_ANSWER_ATTACK');
-    expect(getLegalMoves(s, 'p2')).toEqual([{ type: 'DRAW' }]);
+    expect(getLegalMoves(s, 'p2')).toEqual([single('JH'), { type: 'DRAW' }]);
   });
 });
 
@@ -85,9 +84,15 @@ describe('red Jack cancellation', () => {
     expect(getLegalMoves(s, 'p3')).toEqual([single('5D'), { type: 'DRAW' }]);
   });
 
-  it('cannot cancel a 2 attack', () => {
-    const s = act(scenario({ hands: [['2S', ...filler], ['JH', 'JD', '7D'], ['3C']], top: '9S' }), play('p1', '2S'));
-    expect(reject(s, play('p2', 'JH'))).toBe('MUST_ANSWER_ATTACK');
+  it('v1.2: also cancels a 2 attack — the whole stacked amount', () => {
+    let s = scenario({ hands: [['2S', ...filler], ['2C', '8C', '9C'], ['JH', 'JD', '7D'], ['3C', '4C']], top: '9S' });
+    s = act(act(s, play('p1', '2S')), play('p2', '2C'));
+    expect(s.pendingAttack).toEqual({ kind: 'two', amount: 4 });
+    s = act(s, play('p3', 'JH'));
+    expect(s.pendingAttack).toBeNull();
+    expect(s.events.at(-2)).toMatchObject({ type: 'ATTACK_CANCELLED', playerId: 'p3', cancelledAmount: 4 });
+    expect(hand(s, 'p3')).toEqual(['JD', '7D']);
+    expect(current(s)).toBe('p4');
   });
 
   it('outside attacks, red Jacks match normally by suit or rank', () => {
