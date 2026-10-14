@@ -1,5 +1,13 @@
 # Testing UK Black Jack on an iPhone
 
+## Your links (Expo account `megabytes-labbini`)
+- **Open in Expo Go (always the latest build of app version 0.2.0):**
+  `exp://u.expo.dev/9fef978c-dcf6-4e21-b702-4ee040aa63f1?runtime-version=0.2.0&channel-name=preview`
+- **QR code** (show on another screen, scan with the iPhone Camera):
+  https://qr.expo.dev/eas-update?projectId=9fef978c-dcf6-4e21-b702-4ee040aa63f1&runtimeVersion=0.2.0&channel=preview
+- Expo dashboard: https://expo.dev/accounts/megabytes-labbini/projects/uk-blackjack/updates
+- If you change `version` in `apps/mobile/app.json`, the `runtime-version` part of these links changes too.
+
 ## How it works
 ```
 push to GitHub ──► GitHub Actions: npm install → Vitest → TypeScript → Expo compatibility check

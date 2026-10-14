@@ -13,8 +13,8 @@ Node.js 20+ (developed on 22) and npm 10+.
 
 ## Play on your iPhone
 **No computer needed:** push to `main` and GitHub Actions tests the game, then publishes it to Expo
-(EAS Update). Open it in Expo Go from the QR code in the workflow summary. One-time setup is in
-[docs/IPHONE_TESTING.md](docs/IPHONE_TESTING.md).
+(EAS Update). Open it in Expo Go from the QR code in the workflow summary. One-time setup and your
+Expo Go links are in [docs/IPHONE_TESTING.md](docs/IPHONE_TESTING.md).
 
 With a computer: `npm install && npm run mobile`, then scan the QR code (see [apps/mobile/README.md](apps/mobile/README.md)).
 
