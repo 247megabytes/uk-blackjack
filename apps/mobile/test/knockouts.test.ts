@@ -180,3 +180,11 @@ describe('Knockouts presentation', () => {
     expect(fx[3]!.subtitle).toBe('8s covered — no effect');
   });
 });
+
+describe('banners while watching', () => {
+  it('does not tell a finished or knocked-out human to catch anyone', () => {
+    const ev = { type: 'LAST_CARD_WINDOW_OPENED', version: 3, playerId: 'bot1' } as GameEvent;
+    expect(describeEvents([ev], HUMAN_ID, nameOf)[0]!.subtitle).toBe('Tap Catch Ada before they say it');
+    expect(describeEvents([ev], HUMAN_ID, nameOf, { watching: true })[0]!.subtitle).toBe('Will anyone catch them?');
+  });
+});

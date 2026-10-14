@@ -46,7 +46,7 @@ export function roundRows(summary: RoundSummary, nameOf: (id: PlayerId) => strin
       playerId: id,
       name: nameOf(id),
       label: final && i === 0 ? 'Champion' : ordinal(i + 1),
-      detail: finished ? (final ? 'First out — wins the final' : 'Out of cards — through') : 'Fewer cards — through',
+      detail: finished ? (final ? 'First to play out — wins the final' : 'Played out their hand') : 'Survived on fewer cards',
       kind: 'safe',
       isYou: id === youId,
     });

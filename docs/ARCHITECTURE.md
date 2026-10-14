@@ -18,8 +18,12 @@ Dependency direction is strictly one-way: `apps → protocol/bots → engine`.
 ## Engine model
 - **State** (`GameState`): plain JSON-serialisable data — hands, draw/discard piles, turn index,
   direction, pending attack, phase, Last Card window, RNG state, version, event log.
-- **Actions** (`GameAction`): `PLAY_CARDS` (an ordered list of `{cardId, chosenSuit?}`), `DRAW`, `PASS`, `DECLARE_LAST_CARD`,
-  `CHALLENGE_LAST_CARD`, and server-only `CLOSE_LAST_CARD_WINDOW`.
+- **Actions** (`GameAction`): `PLAY_CARDS` (an ordered list of `{cardId, chosenSuit?}` plus `declareLastCard`), `DRAW`
+  (always ends the turn), `DECLARE_LAST_CARD`, `CHALLENGE_LAST_CARD`, `FORFEIT` (a player leaving, or the server
+  forfeiting a disconnected player), and server-only `CLOSE_LAST_CARD_WINDOW`. `PASS` is retired in v1.2 and always rejected.
+- **Modes**: `GameState.mode` is `classic` (first out wins) or `knockout` (one round of a Knockouts tournament:
+  `PlayerState.status` becomes `finished` in `finishOrder`, turns skip non-active seats, the round ends with
+  `ROUND_COMPLETE` and `eliminatedId` when one holder is left, or on a stall with the most cards out).
 - **Transition**: `applyAction(state, action) → { ok, state, events } | { ok: false, error }`.
   Inputs are never mutated (verified by deep-freezing in tests).
 - **Phases**: `dealing → playing ⇄ lastCardWindow → finished`.
@@ -40,25 +44,35 @@ Dependency direction is strictly one-way: `apps → protocol/bots → engine`.
   attack/top-card consistency, window consistency and end-state sanity.
 
 - **Card-play rules** (`src/sequence.ts`): pure functions over a small `PlayContext` (hand, top card,
-  active suit, attack, drawn card) — `nextCardOptions`, `checkPlays`, `resolvePlays`. The engine builds
+  active suit, attack, whether Last Card is declared) — `nextCardOptions`, `checkPlays`, `resolvePlays`. The engine builds
   the context from `GameState`; bots and the app build it from their redacted `PlayerView`, so all three
   apply identical rules without hidden information. `getLegalMoves` lists one complete play per
   starting card (one per suit for Aces); longer sequences are built with `nextCardOptions`.
 
+- **Tournament layer** (`src/tournament.ts`): `createTournament`, `applyTournamentAction` (game actions,
+  `NEXT_ROUND`, `LEAVE_TOURNAMENT`), `getTournamentView`, `tournamentStandings`. Pure and deterministic: round *n*
+  uses seed `${seed}:r${n}`. Each round is an ordinary knockout-mode `GameState`, so all engine guarantees
+  (validation, idempotency, invariants, redaction) hold per round. A `RoundSummary` records finishing order,
+  advancing players and eliminations for the round-results screen.
+
 ## Bots
 Bots implement `chooseMove(view: PlayerView): MoveIntent | null` and only ever receive a `PlayerView`.
 They submit moves through the same `applyAction` path as humans. Easy is implemented; Medium/Hard come
-after the game is stable.
+after the game is stable. `simulateGame` (Classic or one knockout round) and `simulateTournament` check every
+invariant after every action and can inject random server forfeits to exercise disconnect handling.
 
 ## Server (Phase 3 plan)
 One Colyseus room per match holds the authoritative `GameState`. Clients send `ClientMessage.move` with an
 `actionId` and `expectedVersion`; the server injects the authenticated `playerId` (`toGameAction`), applies it,
 and broadcasts a per-player `PlayerView`. Turn timers and the Last Card window timer are server-side; the
-server issues `CLOSE_LAST_CARD_WINDOW` and auto-draws on turn timeout. Seeds come from a CSPRNG and are never sent.
+server issues `CLOSE_LAST_CARD_WINDOW` and auto-draws on turn timeout. A player who leaves (`leave` message) or whose
+connection stays lost past a grace period is forfeited with `forfeitAction` (protocol v2); in Knockouts the
+server sends a `TournamentView` and the host's `nextRound` deals the next round. Seeds come from a CSPRNG and are never sent.
 
 ## Mobile (Phase 2)
-`apps/mobile/src/game/MatchController` owns the `GameState` for an offline match. The UI asks it for a
-`Plan` (`human`, `bot` move after a delay, `closeWindow`, `finished`), keyed to the state version: the
+`apps/mobile/src/game/MatchController` owns the `GameState` (Classic) or `TournamentState` (Knockouts) for an
+offline match. The UI asks it for a `Plan` (`human`, `bot` move after a delay, `closeWindow`, `roundOver`,
+`finished`), keyed to the round and state version: the
 `useMatch` hook sets one timer per version and cancels it when the human acts first, so stale bot moves
 can never land. Bot decisions are memoised per version (safe under React StrictMode). The UI renders only
 the human's `PlayerView`. In Phase 3 the controller is swapped for a Colyseus room client exposing the

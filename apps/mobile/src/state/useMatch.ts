@@ -54,7 +54,8 @@ export function useMatch(setup: MatchSetup, pacingName: PacingName, onEffects?: 
       const since = newRound ? 0 : seen.current.version;
       const fresh = next.events.filter((e) => e.version > since);
       seen.current = { gameId: next.gameId, version: next.version };
-      const fx = quiet ? [] : describeEvents(fresh, next.viewerId, nameOf);
+      const watching = !next.players.some((p) => p.id === next.viewerId && p.status === 'active');
+      const fx = quiet ? [] : describeEvents(fresh, next.viewerId, nameOf, { watching });
       if (fx.length || newRound || quiet) setEffects(fx);
       if (fx.length) effectsCallback.current?.(fx);
       setView(next);

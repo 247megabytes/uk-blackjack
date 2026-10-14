@@ -25,18 +25,27 @@ run `npx expo install expo@latest --fix` in `apps/mobile`, then try again.
 Other targets: `npm run ios --workspace @ukbj/mobile` (iOS Simulator, macOS + Xcode),
 `npm run android --workspace @ukbj/mobile`, `npm run web --workspace @ukbj/mobile`.
 
-## Playing a turn (v1.1)
+## Playing a turn (v1.2)
 Tap lit cards in the order you want to play them. Each card you pick rises with a number, and the
-cards that can follow light up. Tap the last picked card to take it back. The tray shows what will
-happen; tap **Play**. Tapping an Ace asks you to call a suit. After a Queen, only its suit lights
-up; if you have none, the tray warns you'll pick up one card.
+cards that can follow light up (runs go up or down). Tap the last picked card to take it back. The
+tray shows what will happen, including power cards a later card covers; tap **Play**. Tapping an Ace
+asks you to call a suit and ends the selection. After a Queen, only its suit lights up; if you have
+none, the tray warns you'll pick up one card. Drawing ends your turn. To play out your hand, tap
+**Last Card** first. The app won't send the play until you do.
+
+## Knockouts
+Choose **Knockouts** on the Play solo screen (2–6 players). The header shows the round and one pip per
+player still in. After each round a results sheet lists the finishing order, who was knocked out and who
+goes through. If you finish early or get knocked out you can watch, or skip ahead. The champion gets a
+celebration screen.
 
 ## Structure
 
 ```
 App.tsx              Screen routing (small in-app router), providers
 src/game/            Framework-free game layer — tested headlessly
-  match.ts           MatchController: human seat + bots, pacing, Last Card windows
+  match.ts           MatchController: human seat + bots, pacing, Last Card windows, Knockouts rounds
+  knockouts.ts       Round results, progress and standings wording
   effects.ts         Engine events → banners + haptic hints; status line
   layout.ts          Seat positions, hand fan/rows, sorting
 src/state/           React bindings: useMatch (timers), settings/stats (AsyncStorage), haptics

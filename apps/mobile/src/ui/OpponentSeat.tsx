@@ -60,9 +60,11 @@ export function OpponentSeat({ player, colour, isTurn, catchable, flash }: Props
         <View style={[styles.avatar, { backgroundColor: colour }]}>
           <Text style={styles.initials}>{initials(player.name)}</Text>
         </View>
-        <Animated.View style={[styles.count, player.cardCount === 1 && styles.countHot, countStyle]}>
-          <Text style={[styles.countText, player.cardCount === 1 && styles.countTextHot]}>{player.cardCount}</Text>
-        </Animated.View>
+        {player.status === 'active' ? (
+          <Animated.View style={[styles.count, player.cardCount === 1 && styles.countHot, countStyle]}>
+            <Text style={[styles.countText, player.cardCount === 1 && styles.countTextHot]}>{player.cardCount}</Text>
+          </Animated.View>
+        ) : null}
       </View>
       <Text style={[styles.name, isTurn && styles.nameTurn]} numberOfLines={1}>
         {player.name}

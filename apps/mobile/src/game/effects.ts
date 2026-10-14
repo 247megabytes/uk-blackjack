@@ -61,6 +61,7 @@ export function describeEvents(
   events: readonly GameEvent[],
   viewerId: PlayerId | null,
   nameOf: (id: PlayerId) => string,
+  options: { readonly watching?: boolean } = {},
 ): TableEffect[] {
   const out: TableEffect[] = [];
   const who = (id: PlayerId) => (id === viewerId ? 'You' : nameOf(id));
@@ -109,7 +110,15 @@ export function describeEvents(
       case 'LAST_CARD_WINDOW_OPENED':
         push(e, isYou(e.playerId)
           ? { title: 'Say Last Card!', subtitle: 'Tap Last Card before someone catches you', tone: 'warn', haptic: 'warning', playerId: e.playerId, windowFor: e.playerId }
-          : { title: `${nameOf(e.playerId)} forgot Last Card`, subtitle: `Tap Catch ${nameOf(e.playerId)} before they say it`, tone: 'warn', haptic: 'light', playerId: e.playerId, windowFor: e.playerId });
+          : {
+              title: `${nameOf(e.playerId)} forgot Last Card`,
+              // Finished or knocked-out players can't challenge, so don't invite them to.
+              subtitle: options.watching ? 'Will anyone catch them?' : `Tap Catch ${nameOf(e.playerId)} before they say it`,
+              tone: 'warn',
+              haptic: 'light',
+              playerId: e.playerId,
+              windowFor: e.playerId,
+            });
         break;
       case 'LAST_CARD_CHALLENGED':
         push(e, {

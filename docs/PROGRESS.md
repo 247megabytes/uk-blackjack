@@ -118,6 +118,59 @@
   run and `eas update --channel preview`, then a QR code in the job summary).
 - Removed the deprecated `android.edgeToEdgeEnabled` flag (edge-to-edge is always on in current SDKs).
 
+## Rules update — uk-classic-v1.2 + Knockouts ✅ (2026-10-14)
+
+**Done**
+- Engine (`RULESET_ID = uk-classic-v1.2`, schema v3): runs go up or down; red Jacks cancel any attack;
+  every pick-up ends the turn (PASS retired, no drawn-card state); only the final block of power cards
+  acts (`POWER_COVERED` event); Aces must end a sequence (`ACE_MUST_BE_LAST`); going out needs Last Card
+  (`LAST_CARD_NOT_DECLARED`); Queen covering unchanged.
+- Knockout mode in the engine (`mode: 'knockout'`): player `status`, `finishOrder`, `PLAYER_FINISHED`,
+  skip-aware turn order over active players, `ROUND_COMPLETE` with `eliminatedId`, stalled rounds
+  eliminate the most cards (seeded tie-break).
+- `FORFEIT` action (self or server) for leaves and disconnects in both modes; hand reshuffled into the
+  deck, no card ids revealed.
+- `src/tournament.ts`: deterministic Knockouts tournaments (`createTournament`, `applyTournamentAction`
+  with `NEXT_ROUND` / `LEAVE_TOURNAMENT`, `getTournamentView`, `tournamentStandings`).
+- Bots always declare on going out; `simulateTournament`; forfeit injection in both simulators; CLI
+  `npm run simulate -- <games> <players> [classic|knockouts] [forfeitChance]`.
+- Protocol v2: `leave` / `nextRound` client messages, `tournament` / `playerLeft` server messages,
+  `forfeitAction`.
+- Mobile: Classic/Knockouts mode selector; tournament-aware `MatchController` (round-keyed plans,
+  `roundOver`, `nextRound`, `fastForward`); header progress (round label + pips); seat badges for
+  finished/left players; round-results sheet; champion celebration with confetti; spectator mode with
+  Skip to results / Skip to champion; Last Card reminder and pulsing button for go-outs; covered-power
+  warning in the tray; no Pass button; banners for finishing, forfeits, knock-outs and covered powers;
+  How to Play rewritten; Knockouts stats (played / titles).
+
+**Verified (in the build sandbox)**
+- `npm run test:offline`: 298 tests, 298 pass, 0 fail (57 suites). 26 existing tests were rewritten
+  where v1.2 deliberately changes behaviour (drawn-card play and PASS, every-power-applies, Aces
+  mid-sequence, red Jacks vs 2s, go-outs now declared, ruleset/schema ids); new suites `v12.test.ts`,
+  `knockouts.test.ts` (engine) and `knockouts.test.ts` (mobile).
+- `npm run typecheck:offline` clean; the whole app typechecks against real React 19 / React Native 0.86.3
+  typings (planted-error control caught).
+- Simulations: 10,000 Classic games (2,000 each for 2–6 players): all won, 0 violations, 0 rejected
+  moves. 10,000 Knockouts tournaments (2,000 each for 2–6 players, 30,000 rounds): all complete, 0
+  violations. With random disconnects (1% per action): 3,000 Classic games and 3,000 tournaments,
+  0 violations.
+- Mutation checks: ascending-only runs (12 failing tests), every power applying (12), go-out without Last
+  Card (3), red Jack not cancelling 2s (5), Aces mid-sequence (3).
+- Headless browser (real app code, DOM shim): 4 Classic games and 5 Knockouts tournaments (4- and
+  6-player) played by tapping, including round results, skips, play-outs with Last Card and the champion
+  screen: 0 console errors or warnings. Fixed during this pass: the "Tap Catch" banner shown to players
+  who can no longer challenge; a "0" count badge on finished seats.
+
+**Not yet verified**
+- On-device feel (iPhone / Expo Go) of the new overlays and confetti; real Vitest / `tsc` with installed
+  dependencies run in GitHub Actions on push.
+- Natural stalled rounds never occurred in simulation; that path is covered by engine tests that force
+  the turn cap and a deadlock.
+
+**Interpretations awaiting sign-off** — listed at the end of docs/RULES.md (Ace covering a power card,
+2s-then-red-Jack, attack cleared on forfeit, forfeit leaving one holder, stalled survivor ranking,
+two-player rules by active count, finished players can't challenge, random first player each round).
+
 ## Phase 3 — Multiplayer ⏳ next
 
 ## Phase 4 — Polish

@@ -1,7 +1,7 @@
 # UK Black Jack
 
 Premium mobile-first multiplayer card game based on the British shedding game (not casino Blackjack).
-Ruleset: `uk-classic-v1.1` (multi-card turns, Queen covering, wild Aces) — see [docs/RULES.md](docs/RULES.md).
+Ruleset: `uk-classic-v1.2` (multi-card turns both ways, final-card powers, Queen covering, wild Aces that end the turn, Last Card to go out) plus **Knockouts** mode — see [docs/RULES.md](docs/RULES.md).
 
 ## Status
 Phase 2 complete: playable offline mobile game (Expo) against 1–5 bots, on top of the Phase 1
@@ -25,6 +25,7 @@ npm test                 # full Vitest suite
 npm run typecheck        # strict TypeScript across packages and tests
 npm run typecheck:mobile # the Expo app
 npm run simulate -- 1000 4   # 1,000 seeded games with 4 Easy bots
+npm run simulate -- 1000 6 knockouts   # 1,000 seeded Knockouts tournaments
 ```
 
 No network access to npm? `npm run test:offline` and `npm run typecheck:offline` run the same suite with a
