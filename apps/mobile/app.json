@@ -18,6 +18,15 @@
     },
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9fef978c-dcf6-4e21-b702-4ee040aa63f1"
+      }
+    },
+    "owner": "megabytes-labbini",
+    "updates": {
+      "url": "https://u.expo.dev/9fef978c-dcf6-4e21-b702-4ee040aa63f1"
     }
   }
 }
