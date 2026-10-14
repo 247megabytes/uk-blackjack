@@ -108,6 +108,16 @@
 - Skips and reverses from a sequence resolve at the end of the turn using the final direction.
 - A Queen cover counts as unavailable if it would have to be an illegal finishing card.
 
+## iPhone delivery pipeline (2026-10-14)
+- The Claude sandbox cannot reach npm, Expo or any tunnel service (blocked by organisation egress
+  policy), so a dev server there can't be reached from a phone. The delivery path is GitHub Actions →
+  EAS Update → Expo Go instead; see docs/IPHONE_TESTING.md.
+- Added `expo-updates` (~57.0.26), `runtimeVersion: {policy: appVersion}`, `eas.json` (development /
+  preview / production profiles), `.github/workflows/ci.yml` (real Vitest, tsc, `expo install --check`,
+  expo-doctor, simulations) and `.github/workflows/iphone-preview.yml` (tests, then `eas init` on first
+  run and `eas update --channel preview`, then a QR code in the job summary).
+- Removed the deprecated `android.edgeToEdgeEnabled` flag (edge-to-edge is always on in current SDKs).
+
 ## Phase 3 — Multiplayer ⏳ next
 
 ## Phase 4 — Polish

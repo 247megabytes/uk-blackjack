@@ -4,6 +4,9 @@ Expo SDK 57 · React Native 0.86 · React 19.2 · Reanimated 4.5 · TypeScript (
 
 ## Play it on your iPhone (Expo Go)
 
+**Easiest:** let GitHub Actions publish it for you — see [docs/IPHONE_TESTING.md](../../docs/IPHONE_TESTING.md).
+The steps below run a dev server on your own computer instead.
+
 1. On the iPhone, install **Expo Go** from the App Store.
 2. On your Mac/PC (Node 20+), from the repo root:
    ```bash
@@ -15,8 +18,8 @@ Expo SDK 57 · React Native 0.86 · React 19.2 · Reanimated 4.5 · TypeScript (
    The phone and computer must be on the same Wi-Fi. If your network blocks that (office/guest
    Wi-Fi, VPN), run `npm run start --workspace @ukbj/mobile -- --tunnel` instead.
 
-Expo Go from the App Store runs the current stable SDK. This project targets SDK 57 (stable as of
-October 2026). If Expo Go says the project's SDK is incompatible, Expo has moved to a newer SDK:
+Expo Go from the App Store supports SDK 57 (confirmed by Expo, September 2026) and requires you to be
+signed in to the same Expo account in both Expo Go and the CLI (`npx expo login`). If Expo Go says the project's SDK is incompatible, Expo has moved to a newer SDK:
 run `npx expo install expo@latest --fix` in `apps/mobile`, then try again.
 
 Other targets: `npm run ios --workspace @ukbj/mobile` (iOS Simulator, macOS + Xcode),

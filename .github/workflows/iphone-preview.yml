@@ -1,0 +1,88 @@
+name: iPhone preview
+
+# Every push to main: run the full test suite, then publish the app to Expo
+# (EAS Update) so it opens in Expo Go on an iPhone. Nothing needs to run on
+# your computer, and the published build stays available after this job ends.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: iphone-preview
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to Expo Go
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Check for EXPO_TOKEN
+        id: token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Add a repository secret named EXPO_TOKEN to publish to Expo Go (see docs/IPHONE_TESTING.md)."
+            echo "### Tests passed — publishing skipped: add the EXPO_TOKEN secret (docs/IPHONE_TESTING.md)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.token.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v6
+        if: steps.token.outputs.ready == 'true'
+        with:
+          node-version: 22
+
+      - name: Set up EAS CLI
+        if: steps.token.outputs.ready == 'true'
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        if: steps.token.outputs.ready == 'true'
+        run: npm install --no-audit --no-fund
+
+      - name: Link the Expo project (first run only)
+        if: steps.token.outputs.ready == 'true'
+        working-directory: apps/mobile
+        run: |
+          if node -e "process.exit(require('./app.json').expo?.extra?.eas?.projectId ? 0 : 1)"; then
+            echo "Already linked to an Expo project."
+          else
+            eas init --non-interactive --force
+            node ../../scripts/expo-link.mjs app.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app.json
+            git commit -m "Link Expo project for EAS Update [skip ci]"
+            git push
+          fi
+
+      - name: Publish update to the preview channel
+        if: steps.token.outputs.ready == 'true'
+        working-directory: apps/mobile
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || 'Manual preview' }}
+        run: |
+          MSG="$(printf '%s' "$COMMIT_MESSAGE" | head -n 1 | cut -c1-120)"
+          eas update --channel preview --platform ios --message "$MSG" --non-interactive --json > ../../update.json
+          cat ../../update.json
+
+      - name: Post the Expo Go link
+        if: steps.token.outputs.ready == 'true'
+        run: node scripts/preview-summary.mjs update.json apps/mobile/app.json "$(eas whoami 2>/dev/null | head -n 1)"

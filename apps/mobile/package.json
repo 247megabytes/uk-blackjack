@@ -2,7 +2,7 @@
   "name": "@ukbj/mobile",
   "version": "0.2.0",
   "private": true,
-  "description": "UK Black Jack — Expo + React Native client (iOS, Android, Web).",
+  "description": "UK Black Jack \u2014 Expo + React Native client (iOS, Android, Web).",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -19,6 +19,7 @@
     "expo": "~57.0.28",
     "expo-haptics": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.26",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",

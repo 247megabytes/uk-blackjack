@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  test:
+    name: Tests, types and Expo compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Vitest (engine, bots, mobile game layer)
+        run: npx vitest run
+
+      - name: TypeScript — packages and tests
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: TypeScript — Expo app
+        run: npm run typecheck --workspace @ukbj/mobile
+
+      - name: Expo SDK package compatibility
+        working-directory: apps/mobile
+        run: npx expo install --check
+
+      - name: Expo Doctor (advisory)
+        working-directory: apps/mobile
+        continue-on-error: true
+        run: npx expo-doctor
+
+      - name: Bot simulations (2,000 games)
+        run: npm run simulate -- 2000 4
+
+      - name: Keep the resolved lockfile
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          if-no-files-found: ignore

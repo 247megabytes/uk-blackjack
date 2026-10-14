@@ -1,6 +1,6 @@
 {
   "name": "uk-blackjack",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "description": "UK Black Jack \u2014 mobile-first multiplayer shedding card game",
   "workspaces": [

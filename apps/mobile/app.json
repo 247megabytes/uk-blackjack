@@ -11,11 +11,13 @@
       "bundleIdentifier": "com.example.ukblackjack"
     },
     "android": {
-      "package": "com.example.ukblackjack",
-      "edgeToEdgeEnabled": true
+      "package": "com.example.ukblackjack"
     },
     "web": {
       "bundler": "metro"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
