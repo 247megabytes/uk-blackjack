@@ -9,7 +9,9 @@ import {
   buildPlay,
   canArmLastCard,
   hasMove,
+  HUMAN_ID,
   isHumanTurn,
+  LAST_CARD_REMINDER,
   lastPlay,
   lastTurnCards,
   opponentSeats,
@@ -33,6 +35,7 @@ import { ActiveSuitChip, AttackChip, DiscardPile, DrawPile, type Origin } from '
 import { SequenceTray } from '../ui/SequenceTray';
 import { SuitPicker } from '../ui/SuitPicker';
 import { ResultsOverlay } from '../ui/ResultsOverlay';
+import { ChampionOverlay, RoundResultsOverlay, TournamentProgress } from '../ui/Knockouts';
 import { colors, radius, serif, space } from '../ui/theme';
 
 interface Props {
@@ -57,7 +60,9 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
     },
     [settings.haptics],
   );
-  const { view, effects, nameOf, act } = useMatch(setup, settings.pacing, onEffects);
+  const { view, tournament, effects, nameOf, act, nextRound, skip, humanActive, humanEliminated } = useMatch(setup, settings.pacing, onEffects);
+  const knockouts = tournament !== null;
+  const youId = HUMAN_ID;
 
   const [armed, setArmed] = useState(false);
   const [selection, setSelection] = useState<CardPlay[]>([]);
@@ -83,18 +88,22 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
   useEffect(() => setArmed(false), [view.hand.length, view.currentPlayerId, selection.length]);
 
   // Record the result once, then reveal the results sheet after the final card lands.
+  // Classic: the game is the match. Knockouts: round results after each round, the
+  // champion celebration once the tournament is complete.
+  const matchOver = knockouts ? tournament.phase === 'complete' : view.phase === 'finished';
+  const roundOver = knockouts && tournament.phase === 'roundOver';
   useEffect(() => {
-    if (view.phase !== 'finished') {
+    if (!matchOver && !roundOver) {
       setShowResults(false);
       return;
     }
-    if (recorded.current !== view.gameId) {
-      recorded.current = view.gameId;
-      recordResult(view.winnerId === view.viewerId);
+    if (matchOver && recorded.current !== setup.seed) {
+      recorded.current = setup.seed;
+      recordResult(knockouts ? tournament.championId === HUMAN_ID : view.winnerId === view.viewerId, knockouts ? 'knockouts' : 'classic');
     }
     const t = setTimeout(() => setShowResults(true), 1100);
     return () => clearTimeout(t);
-  }, [view.phase, view.gameId, view.winnerId, view.viewerId, recordResult]);
+  }, [matchOver, roundOver, view.gameId, setup.seed, knockouts, tournament?.championId, view.winnerId, view.viewerId, recordResult]);
 
   useEffect(() => {
     if (!hint) return;
@@ -142,6 +151,7 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
     if (!move) {
       haptic('warning', settings.haptics);
       if (selState.kind === 'invalid') setHint(selState.error.message);
+      else if (selState.kind === 'ready' && selState.needsLastCard) setHint(LAST_CARD_REMINDER);
       return;
     }
     send(move);
@@ -159,7 +169,6 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
 
   const choosing = selection.length > 0;
   const canDraw = yourTurn && !choosing && hasMove(view, 'DRAW');
-  const canPass = yourTurn && !choosing && hasMove(view, 'PASS');
   const canDeclare = hasMove(view, 'DECLARE_LAST_CARD');
   const canArm = canArmLastCard(view, selection);
   const sequence = lastTurnCards(view);
@@ -175,9 +184,13 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
           <IconButton label="Leave game" onPress={() => setConfirmExit(true)}>
             <CloseIcon />
           </IconButton>
-          <Text style={styles.turn} accessibilityRole="text">
-            Turn {view.turnNumber}
-          </Text>
+          {tournament ? (
+            <TournamentProgress tournament={tournament} nameOf={nameOf} />
+          ) : (
+            <Text style={styles.turn} accessibilityRole="text">
+              Turn {view.turnNumber}
+            </Text>
+          )}
           <View style={styles.direction} accessible accessibilityLabel={view.direction === 1 ? 'Play is clockwise' : 'Play is anticlockwise'}>
             <DirectionIcon clockwise={view.direction === 1} />
           </View>
@@ -228,7 +241,7 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
           )}
         </View>
 
-        <SequenceTray selection={selection} hand={view.hand} state={selState} onPlay={onPlaySelection} onClear={() => setSelection([])} />
+        <SequenceTray selection={selection} hand={view.hand} state={selState} armed={armed} onPlay={onPlaySelection} onClear={() => setSelection([])} />
 
         <View style={styles.actions}>
           {canDraw ? (
@@ -240,11 +253,10 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
               accessibilityHint={view.pendingAttack ? 'Takes the penalty and ends your turn' : 'Draws one card'}
             />
           ) : null}
-          {canPass ? <Button label="Pass" variant="secondary" compact onPress={() => send({ type: 'PASS' })} /> : null}
           {canDeclare || canArm ? (
             <LastCardButton
               armed={armed}
-              urgent={canDeclare && view.lastCardWindowPlayerId === view.viewerId}
+              urgent={(canDeclare && view.lastCardWindowPlayerId === view.viewerId) || (selState.kind === 'ready' && selState.needsLastCard && !armed)}
               onPress={() => {
                 if (canDeclare) send({ type: 'DECLARE_LAST_CARD' });
                 else {
@@ -256,6 +268,15 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
           ) : null}
           {challenge && challenge.type === 'CHALLENGE_LAST_CARD' ? (
             <Button label={`Catch ${nameOf(challenge.targetPlayerId)}`} variant="danger" compact onPress={() => send(challenge)} />
+          ) : null}
+          {knockouts && !humanActive && tournament.phase === 'playing' && view.phase !== 'finished' ? (
+            <Button
+              label={humanEliminated ? 'Skip to champion' : 'Skip to results'}
+              variant="secondary"
+              compact
+              onPress={() => skip(humanEliminated)}
+              accessibilityHint="Plays the rest instantly"
+            />
           ) : null}
         </View>
 
@@ -276,14 +297,28 @@ export function GameScreen({ setup, onRematch, onChangeTable, onExit }: Props) {
 
       {pendingAce ? <SuitPicker ace={pendingAce} onChoose={onChooseSuit} onCancel={() => setPendingAce(null)} /> : null}
 
-      {showResults ? (
+      {showResults && !knockouts ? (
         <ResultsOverlay view={view} stats={stats} onRematch={onRematch} onChangeTable={onChangeTable} onHome={onExit} />
+      ) : null}
+      {showResults && knockouts && roundOver ? (
+        <RoundResultsOverlay
+          tournament={tournament}
+          youId={youId}
+          nameOf={nameOf}
+          eliminated={humanEliminated}
+          onNext={nextRound}
+          onSkip={() => skip(true)}
+          onHome={onExit}
+        />
+      ) : null}
+      {showResults && knockouts && matchOver ? (
+        <ChampionOverlay tournament={tournament} youId={youId} nameOf={nameOf} stats={stats} onRematch={onRematch} onChangeTable={onChangeTable} onHome={onExit} />
       ) : null}
 
       {confirmExit ? (
         <Animated.View entering={FadeIn.duration(150)} style={styles.scrim}>
           <View style={styles.confirm} accessibilityViewIsModal>
-            <Text style={styles.confirmTitle}>Leave this game?</Text>
+            <Text style={styles.confirmTitle}>{knockouts ? 'Leave the Knockouts?' : 'Leave this game?'}</Text>
             <Text style={styles.confirmBody}>It will count as unfinished and won’t affect your stats.</Text>
             <Button label="Keep playing" onPress={() => setConfirmExit(false)} />
             <Button label="Leave game" variant="secondary" onPress={onExit} />

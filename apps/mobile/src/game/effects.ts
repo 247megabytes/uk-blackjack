@@ -33,6 +33,17 @@ export function pickBanner(effects: readonly TableEffect[]): TableEffect | null 
   return best;
 }
 
+export function ordinal(n: number): string {
+  const s = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+  return `${n}${s}`;
+}
+
+function powerList(cards: readonly Card[]): string {
+  const names = cards.map((c) => (c.rank === 'J' ? 'Jack' : c.rank === 'K' ? 'King' : c.rank));
+  const uniq = [...new Set(names)];
+  return uniq.length === 1 ? (cards.length > 1 ? `${uniq[0]}s` : `The ${uniq[0]}`) : 'Power cards';
+}
+
 const RANK_NAMES: Record<Card['rank'], string> = {
   A: 'Ace', '2': 'Two', '3': 'Three', '4': 'Four', '5': 'Five', '6': 'Six', '7': 'Seven',
   '8': 'Eight', '9': 'Nine', '10': 'Ten', J: 'Jack', Q: 'Queen', K: 'King',
@@ -124,8 +135,31 @@ export function describeEvents(
           playerId: e.playerId,
         });
         break;
-      case 'ATTACK_NEUTRALISED':
-        push(e, { title: 'Covered', subtitle: `${e.kind === 'two' ? 'The 2' : 'The black Jack'} is cancelled — no pick-up`, tone: 'defend', haptic: 'light', playerId: e.playerId });
+      case 'POWER_COVERED':
+        push(e, {
+          title: 'Covered',
+          subtitle: `${powerList(e.cards)} covered — no effect`,
+          tone: 'defend',
+          haptic: 'light',
+          playerId: e.playerId,
+        });
+        break;
+      case 'PLAYER_FINISHED':
+        push(e, {
+          title: isYou(e.playerId) ? `You're out — ${ordinal(e.place)}!` : `${nameOf(e.playerId)} is out — ${ordinal(e.place)}`,
+          subtitle: isYou(e.playerId) ? 'Safe this round' : 'Safe this round',
+          tone: isYou(e.playerId) ? 'win' : 'info',
+          haptic: isYou(e.playerId) ? 'success' : 'light',
+          playerId: e.playerId,
+        });
+        break;
+      case 'PLAYER_FORFEITED':
+        push(e, { title: `${who(e.playerId)} left`, subtitle: isYou(e.playerId) ? 'You forfeited' : `${nameOf(e.playerId)} forfeits`, tone: 'warn', haptic: 'warning', playerId: e.playerId });
+        break;
+      case 'ROUND_COMPLETE':
+        push(e, e.eliminatedId
+          ? { title: isYou(e.eliminatedId) ? 'Knocked out' : `${nameOf(e.eliminatedId)} is knocked out`, subtitle: e.reason === 'stalled' ? 'Round stalled — most cards goes' : 'Last one holding cards', tone: 'win', haptic: isYou(e.eliminatedId) ? 'error' : 'success', playerId: e.eliminatedId }
+          : { title: 'Round over', tone: 'win', haptic: 'light' });
         break;
       case 'TURN_STARTED':
         if (isYou(e.playerId)) push(e, { title: 'Your turn', tone: 'turn', haptic: 'light', playerId: e.playerId });
@@ -164,7 +198,10 @@ export function lastPlay(view: PlayerView): { playerId: PlayerId; card: Card; ve
 
 /** Status line for the human, e.g. "Your turn — match ♥ or 9". */
 export function statusLine(view: PlayerView, nameOf: (id: PlayerId) => string): string {
-  if (view.phase === 'finished') return 'Game over';
+  if (view.phase === 'finished') return view.mode === 'knockout' ? 'Round over' : 'Game over';
+  const me = view.players.find((p) => p.id === view.viewerId);
+  if (!me) return `Watching — ${nameOf(view.currentPlayerId)} to play`;
+  if (me.status === 'finished') return `You finished ${ordinal(me.place ?? 0)} — watching the rest of the round`;
   if (view.phase === 'lastCardWindow') {
     return view.lastCardWindowPlayerId === view.viewerId ? 'Quick — say Last Card!' : `${nameOf(view.lastCardWindowPlayerId ?? '')} is on one card…`;
   }
@@ -172,10 +209,9 @@ export function statusLine(view: PlayerView, nameOf: (id: PlayerId) => string): 
   if (!yourTurn) return `${nameOf(view.currentPlayerId)} is thinking…`;
   if (view.pendingAttack) {
     return view.pendingAttack.kind === 'two'
-      ? `Play a 2 or pick up ${view.pendingAttack.amount}`
+      ? `Play a 2 or a red Jack, or pick up ${view.pendingAttack.amount}`
       : `Play a Jack or pick up ${view.pendingAttack.amount}`;
   }
-  if (view.drawnCardId) return 'Play the card you drew, or pass';
   const top = view.topCard;
   const hasPlay = view.legalMoves.some((m) => m.type === 'PLAY_CARDS');
   if (!hasPlay) return 'No match — draw a card';

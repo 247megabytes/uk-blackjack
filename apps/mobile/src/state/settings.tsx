@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { PacingName } from '../game';
+import type { MatchMode, PacingName } from '../game';
 
 export interface Settings {
   readonly playerName: string;
@@ -8,6 +8,7 @@ export interface Settings {
   readonly pacing: PacingName;
   readonly haptics: boolean;
   readonly highlightPlayable: boolean;
+  readonly mode: MatchMode;
 }
 
 export interface Stats {
@@ -15,6 +16,9 @@ export interface Stats {
   readonly won: number;
   readonly currentStreak: number;
   readonly bestStreak: number;
+  /** Knockouts tournaments finished / won (as champion). */
+  readonly tournaments: number;
+  readonly championships: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -23,9 +27,10 @@ export const DEFAULT_SETTINGS: Settings = {
   pacing: 'normal',
   haptics: true,
   highlightPlayable: true,
+  mode: 'classic',
 };
 
-export const EMPTY_STATS: Stats = { played: 0, won: 0, currentStreak: 0, bestStreak: 0 };
+export const EMPTY_STATS: Stats = { played: 0, won: 0, currentStreak: 0, bestStreak: 0, tournaments: 0, championships: 0 };
 
 const SETTINGS_KEY = 'ukbj.settings.v1';
 const STATS_KEY = 'ukbj.stats.v1';
@@ -35,7 +40,7 @@ interface SettingsContextValue {
   stats: Stats;
   loaded: boolean;
   update: (patch: Partial<Settings>) => void;
-  recordResult: (won: boolean) => void;
+  recordResult: (won: boolean, mode?: MatchMode) => void;
   resetStats: () => void;
 }
 
@@ -83,10 +88,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const recordResult = useCallback((won: boolean) => {
+  const recordResult = useCallback((won: boolean, mode: MatchMode = 'classic') => {
     setStats((prev) => {
+      if (mode === 'knockouts') {
+        const ko: Stats = { ...prev, tournaments: prev.tournaments + 1, championships: prev.championships + (won ? 1 : 0) };
+        writeJson(STATS_KEY, ko);
+        return ko;
+      }
       const currentStreak = won ? prev.currentStreak + 1 : 0;
       const next: Stats = {
+        ...prev,
         played: prev.played + 1,
         won: prev.won + (won ? 1 : 0),
         currentStreak,

@@ -11,13 +11,14 @@ function viewOf(hand: string[], top: string, extra: Partial<GameState> = {}) {
     schemaVersion: STATE_SCHEMA_VERSION,
     rulesetId: RULESET_ID,
     rules: UK_CLASSIC_V1,
+    mode: 'classic',
     gameId: 't',
     version: 3,
     rngState: 1,
     phase: 'playing',
     players: [
-      { id: 'you', name: 'You', hand: hand.map(parseCard), declaredLastCard: false },
-      { id: 'bot1', name: 'Ada', hand: others.map(parseCard), declaredLastCard: false },
+      { id: 'you', name: 'You', hand: hand.map(parseCard), declaredLastCard: false, status: 'active' },
+      { id: 'bot1', name: 'Ada', hand: others.map(parseCard), declaredLastCard: false, status: 'active' },
     ],
     drawPile: [parseCard('KC')],
     discardPile: [parseCard(top)],
@@ -30,6 +31,8 @@ function viewOf(hand: string[], top: string, extra: Partial<GameState> = {}) {
     turnNumber: 2,
     winnerId: null,
     endReason: null,
+    finishOrder: [],
+    eliminatedId: null,
     processedActionIds: [],
     events: [],
     ...extra,
@@ -73,14 +76,53 @@ describe('tap-to-build sequences', () => {
     expect(r.kind).toBe('rejected');
   });
 
-  it('asks for a suit when an Ace is tapped, then follows the called suit', () => {
+  it('asks for a suit when an Ace is tapped; the Ace ends the sequence (v1.2)', () => {
     const v = viewOf(['AD', '5H', '5S', '3C'], '9C');
     const r = tapCard(v, [], parseCard('AD'));
     expect(r.kind).toBe('chooseSuit');
     const sel = addAce([], parseCard('AD'), 'H');
-    expect([...selectableCardIds(v, sel)]).toEqual(['5H']);
+    expect([...selectableCardIds(v, sel)]).toEqual([]);
     const st = selectionState(v, sel);
     expect(st.kind === 'ready' && st.outcome.activeSuit).toBe('H');
+    const after = tapCard(v, sel, parseCard('5H'));
+    expect(after.kind === 'rejected' && after.reason.includes('Ace')).toBe(true);
+  });
+
+  it('runs light up in both directions (7♠ → 6♠ or 8♠)', () => {
+    const v = viewOf(['7S', '6S', '8S', '3C'], '7H');
+    expect([...selectableCardIds(v, tapIds(v, ['7S']))].sort()).toEqual(['6S', '8S']);
+    expect([...selectableCardIds(v, tapIds(v, ['7S', '6S']))]).toEqual([]);
+  });
+
+  it('going out needs Last Card: Play is refused until it is armed, with a reminder', () => {
+    const v = viewOf(['7S', '6S'], '7H');
+    const sel = tapIds(v, ['7S', '6S']);
+    const st = selectionState(v, sel);
+    expect(st.kind === 'ready' && st.goesOut && st.needsLastCard).toBe(true);
+    expect(canArmLastCard(v, sel)).toBe(true);
+    expect(buildPlay(v, sel, false)).toBeNull();
+    expect(buildPlay(v, sel, true)).toEqual({ type: 'PLAY_CARDS', plays: sel, declareLastCard: true });
+  });
+
+  it('a player who already declared can go out without arming again', () => {
+    const base = viewOf(['6S'], '7S');
+    const v = { ...base, players: base.players.map((p) => (p.id === 'you' ? { ...p, declaredLastCard: true } : p)) };
+    const sel = tapIds(v, ['6S']);
+    const st = selectionState(v, sel);
+    expect(st.kind === 'ready' && st.needsLastCard).toBe(false);
+    expect(buildPlay(v, sel, false)).toEqual({ type: 'PLAY_CARDS', plays: sel });
+  });
+
+  it('a red Jack lights up against a 2 attack', () => {
+    const v = viewOf(['JD', 'JS', '5C'], '2H', { pendingAttack: { kind: 'two', amount: 2 } });
+    expect([...selectableCardIds(v, [])]).toEqual(['JD']);
+  });
+
+  it('flags power cards that a later card will cover', () => {
+    const v = viewOf(['7S', '8S', '9S', '3C'], '7H');
+    const st = selectionState(v, tapIds(v, ['7S', '8S', '9S']));
+    expect(st.kind === 'ready' && st.outcome.effects.some((e) => e.kind === 'powerCovered')).toBe(true);
+    expect(st.kind === 'ready' && st.outcome.eights).toBe(0);
   });
 
   it('prompts to cover a Queen and blocks Play until it is covered', () => {

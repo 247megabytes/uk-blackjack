@@ -74,7 +74,7 @@ describe('v1.1 banners', () => {
         ev({ type: 'SEQUENCE_PLAYED', playerId: 'bot1', cards: ['7S', '8S', '9S'].map(parseCard) }),
         ev({ type: 'SUIT_CHOSEN', playerId: 'bot2', suit: 'H' }),
         ev({ type: 'QUEEN_UNCOVERED', playerId: 'you', queen: parseCard('QH') }),
-        ev({ type: 'ATTACK_NEUTRALISED', playerId: 'bot1', kind: 'two', amount: 2 }),
+        ev({ type: 'POWER_COVERED', playerId: 'bot1', cards: [parseCard('2H')] }),
         ev({ type: 'TURN_STARTED', playerId: 'you', turnNumber: 4 }),
       ],
       'you',
@@ -122,7 +122,6 @@ describe('view helpers', () => {
       if (plan.kind === 'human') {
         const move = m.view().legalMoves.find((x) => x.type === 'PLAY_CARDS') ?? { type: 'DRAW' as const };
         m.submitHuman(move);
-        if (m.view().drawnCardId) m.submitHuman({ type: 'PASS' });
       } else m.runPlan(plan);
     }
     expect(lastPlay(m.view())).not.toBeNull();

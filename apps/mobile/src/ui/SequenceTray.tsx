@@ -11,6 +11,8 @@ interface Props {
   selection: readonly CardPlay[];
   hand: readonly Card[];
   state: SelectionState;
+  /** Last Card is armed for this play. */
+  armed: boolean;
   onPlay: () => void;
   onClear: () => void;
 }
@@ -22,7 +24,7 @@ const SUIT_WORD = { H: 'heart', D: 'diamond', S: 'spade', C: 'club' } as const;
  * played: a Queen waiting for its cover, an Ace's called suit, the pick-up penalty for
  * an uncovered Queen, or why the sequence can't end here yet.
  */
-export function SequenceTray({ selection, hand, state, onPlay, onClear }: Props) {
+export function SequenceTray({ selection, hand, state, armed, onPlay, onClear }: Props) {
   if (selection.length === 0) return null;
   const cards = selection.map((p) => ({ play: p, card: hand.find((c) => c.id === p.cardId)! })).filter((x) => x.card);
   const count = selection.length;
@@ -30,13 +32,17 @@ export function SequenceTray({ selection, hand, state, onPlay, onClear }: Props)
   let note: { text: string; tone: 'ok' | 'warn' | 'bad' };
   if (state.kind === 'needsCover') note = { text: `Cover the Queen with a ${SUIT_WORD[state.suit]}`, tone: 'warn' };
   else if (state.kind === 'invalid') note = { text: state.error.message, tone: 'bad' };
+  else if (state.kind === 'ready' && state.needsLastCard && !armed) note = { text: 'Tap Last Card first to play out your hand', tone: 'warn' };
+  else if (state.kind === 'ready' && state.goesOut) note = { text: 'Last Card! This plays out your hand', tone: 'ok' };
+  else if (state.kind === 'ready' && state.outcome.effects.some((e) => e.kind === 'powerCovered')) note = { text: 'Your covered power card won’t take effect', tone: 'warn' };
   else if (state.kind === 'ready' && state.queenPenalty) note = { text: 'No card to cover the Queen — you’ll pick up 1 and your turn ends', tone: 'warn' };
   else if (state.kind === 'ready' && state.outcome.attack) note = { text: `Next player picks up ${state.outcome.attack.amount} unless they answer`, tone: 'ok' };
   else if (state.kind === 'ready' && state.outcome.activeSuit) note = { text: `Calls ${SUIT_NAMES[state.outcome.activeSuit].toLowerCase()}`, tone: 'ok' };
   else note = { text: 'Add more cards, or play these', tone: 'ok' };
 
   const canPlay = state.kind === 'ready';
-  const label = state.kind === 'ready' && state.queenPenalty ? 'Play and pick up 1' : count === 1 ? 'Play card' : `Play ${count} cards`;
+  const label =
+    state.kind === 'ready' && state.queenPenalty ? 'Play and pick up 1' : state.kind === 'ready' && state.goesOut ? 'Play out' : count === 1 ? 'Play card' : `Play ${count} cards`;
 
   return (
     <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={styles.tray} accessibilityLabel={`Selected ${count} ${count === 1 ? 'card' : 'cards'}`}>

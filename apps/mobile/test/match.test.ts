@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { findInvariantViolations, SUITS, type CardPlay, type MoveIntent, type PlayerView } from '@ukbj/game-engine';
+import type { CardPlay } from '@ukbj/game-engine';
 import { createEasyBot, type Bot } from '@ukbj/game-bots';
 import {
-  addAce,
   buildPlay,
   canArmLastCard,
-  selectableCardIds,
-  selectionState,
-  tapCard,
   HUMAN_ID,
   MatchController,
   PACING,
@@ -15,88 +11,7 @@ import {
   standings,
   type Plan,
 } from '../src/game';
-
-type HumanPolicy = (view: PlayerView, step: number) => MoveIntent | null;
-
-/**
- * Plays a turn exactly as a person would in the app: tap lit cards to build a
- * sequence (choosing a suit when an Ace is tapped), back off the last card if the
- * sequence can't end there, then press Play — or Draw / Pass when nothing is lit.
- */
-export function uiTurn(view: PlayerView, step: number, armed: boolean): MoveIntent {
-  let sel: CardPlay[] = [];
-  for (let k = 0; k < 14; k++) {
-    const opts = [...selectableCardIds(view, sel)].sort();
-    const state = selectionState(view, sel);
-    if (opts.length === 0 || (state.kind === 'ready' && (step + k) % 3 === 0)) break;
-    const card = view.hand.find((c) => c.id === opts[(step * 7 + k) % opts.length])!;
-    const r = tapCard(view, sel, card);
-    if (r.kind === 'chooseSuit') sel = addAce(sel, card, SUITS[(step + k) % 4]!);
-    else if (r.kind === 'selection') sel = r.selection;
-    else throw new Error(`lit card was rejected: ${r.reason}`);
-  }
-  while (sel.length > 0 && selectionState(view, sel).kind !== 'ready') {
-    const last = view.hand.find((c) => c.id === sel[sel.length - 1]!.cardId)!;
-    const r = tapCard(view, sel, last);
-    if (r.kind !== 'selection') throw new Error('tapping a selected card must remove it');
-    sel = r.selection;
-  }
-  const move = sel.length ? buildPlay(view, sel, armed && canArmLastCard(view, sel)) : null;
-  if (move) return move;
-  if (view.legalMoves.some((m) => m.type === 'PASS')) return { type: 'PASS' };
-  if (view.legalMoves.some((m) => m.type === 'DRAW')) return { type: 'DRAW' };
-  throw new Error(`no UI move available: ${JSON.stringify(view.legalMoves)}`);
-}
-
-/** Random legal play, sometimes forgets Last Card, challenges when possible. */
-const randomHuman = (forgetEvery = 3): HumanPolicy => (view, step) => {
-  const moves = view.legalMoves;
-  if (view.phase === 'lastCardWindow') {
-    return moves.find((m) => m.type === 'CHALLENGE_LAST_CARD' || (m.type === 'DECLARE_LAST_CARD' && step % 2 === 0)) ?? null;
-  }
-  if (view.currentPlayerId !== view.viewerId) return null;
-  void moves;
-  return uiTurn(view, step, step % forgetEvery !== 0);
-};
-
-interface RunResult {
-  match: MatchController;
-  steps: number;
-  violations: string[];
-  humanWindowPlans: Plan[];
-}
-
-/** Drives a match exactly as the UI does: plan → (human acts | wait → runPlan). */
-function runMatch(seed: string, botCount: number, human: HumanPolicy, makeBot?: (id: string, seat: number) => Bot): RunResult {
-  const match = new MatchController({ seed, humanName: 'Tester', botCount }, makeBot);
-  const violations: string[] = [];
-  const humanWindowPlans: Plan[] = [];
-  let steps = 0;
-  while (!match.isFinished() && steps < 4000 && violations.length === 0) {
-    steps++;
-    const plan = match.plan(PACING.normal);
-    if (plan.kind === 'finished') break;
-    const view = match.view();
-    if (view.phase === 'lastCardWindow' && view.lastCardWindowPlayerId === HUMAN_ID) humanWindowPlans.push(plan);
-    const humanMove = human(view, steps);
-    const humanActs = plan.kind === 'human' || (view.phase === 'lastCardWindow' && humanMove !== null);
-    if (humanActs) {
-      if (!humanMove) {
-        violations.push(`human had nothing to do on a human plan: ${JSON.stringify(view.legalMoves)}`);
-        break;
-      }
-      const r = match.submitHuman(humanMove);
-      if (!r.ok) violations.push(`human move rejected: ${r.error.code} ${JSON.stringify(humanMove)}`);
-      else if (plan.kind !== 'human' && match.runPlan(plan) !== null) violations.push('stale plan executed after human acted');
-    } else {
-      if (plan.delayMs <= 0) violations.push('non-positive delay');
-      const r = match.runPlan(plan);
-      if (!r || !r.ok) violations.push(`plan failed: ${JSON.stringify(plan)} ${r && !r.ok ? r.error.code : 'stale'}`);
-    }
-    for (const v of findInvariantViolations(match.state)) violations.push(v);
-  }
-  return { match, steps, violations, humanWindowPlans };
-}
+import { randomHuman, runMatch, uiTurn } from './drive';
 
 describe('MatchController — full offline matches', () => {
   for (const bots of [1, 2, 3, 4, 5]) {
@@ -142,7 +57,6 @@ describe('MatchController — planning', () => {
     for (let i = 0; i < 50 && m.plan(PACING.normal).kind === 'human'; i++) {
       const v = m.view();
       m.submitHuman(uiTurn(v, i, true));
-      if (m.view().drawnCardId) m.submitHuman({ type: 'PASS' });
     }
     const p1 = m.plan(PACING.normal);
     const before = calls;
@@ -158,8 +72,10 @@ describe('MatchController — planning', () => {
   it('ignores stale plans', () => {
     const m = new MatchController({ seed: 'stale', humanName: 'A', botCount: 1 });
     const plan = m.plan(PACING.normal);
-    const fake: Plan = { kind: 'closeWindow', version: plan.version - 1, delayMs: 10 };
+    const fake: Plan = { kind: 'closeWindow', round: 1, version: plan.version - 1, delayMs: 10 };
     expect(m.runPlan(fake)).toBeNull();
+    const otherRound: Plan = { kind: 'closeWindow', round: 2, version: plan.version, delayMs: 10 };
+    expect(m.runPlan(otherRound)).toBeNull();
   });
 
   it('gives the human a grace period before bots challenge a missed Last Card', () => {
@@ -235,7 +151,7 @@ describe('human move helpers', () => {
         const plan = m.plan(PACING.fast);
         const firstCard = [...playableCardIds(v)].map((id) => v.hand.find((c) => c.id === id)!).find((c) => c.rank !== 'A' && c.rank !== 'Q');
         const sel: CardPlay[] = firstCard ? [{ cardId: firstCard.id }] : [];
-        if (plan.kind === 'human' && sel.length && canArmLastCard(v, sel)) {
+        if (plan.kind === 'human' && sel.length && v.hand.length === 2 && canArmLastCard(v, sel)) {
           expect(buildPlay(v, sel, false)).toEqual({ type: 'PLAY_CARDS', plays: sel });
           expect(buildPlay(v, sel, true)).toEqual({ type: 'PLAY_CARDS', plays: sel, declareLastCard: true });
           expect(buildPlay(v, [{ cardId: 'XX' as never }], true)).toBeNull();

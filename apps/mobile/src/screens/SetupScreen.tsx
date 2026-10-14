@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AVATAR_COLOURS, BOT_NAMES, initials, MAX_BOTS, MIN_BOTS, type PacingName } from '../game';
+import { AVATAR_COLOURS, BOT_NAMES, initials, MAX_BOTS, MIN_BOTS, type MatchMode, type PacingName } from '../game';
 import { useSettings } from '../state/settings';
 import { Button } from '../ui/Buttons';
 import { colors, radius, space, type as t } from '../ui/theme';
@@ -11,13 +11,27 @@ interface Props {
 }
 
 export const PACING_LABELS: Record<PacingName, string> = { relaxed: 'Relaxed', normal: 'Normal', fast: 'Fast' };
+const MODE_LABELS: Record<MatchMode, string> = { classic: 'Classic', knockouts: 'Knockouts' };
 
 export function SetupScreen({ onBack, onStart }: Props) {
   const { settings, update } = useSettings();
   const count = settings.botCount;
+  const knockouts = settings.mode === 'knockouts';
+  const rounds = count; // players − 1
+  const cta = knockouts ? `Start ${count + 1}-player Knockouts` : `Deal ${count + 1} hands`;
 
   return (
-    <Screen title="Play solo" onBack={onBack} footer={<Button label={`Deal ${count + 1} hands`} onPress={onStart} />}>
+    <Screen title="Play solo" onBack={onBack} footer={<Button label={cta} onPress={onStart} />}>
+      <View style={styles.block}>
+        <Text style={t.heading}>Mode</Text>
+        <Segmented<MatchMode> value={settings.mode} options={['classic', 'knockouts']} labels={MODE_LABELS} onChange={(mode) => update({ mode })} />
+        <Text style={t.small} accessibilityLiveRegion="polite">
+          {knockouts
+            ? `Rounds of 7 cards. Get out to stay in — the last player holding cards is knocked out. ${rounds} ${rounds === 1 ? 'round' : 'rounds'} to crown a champion.`
+            : 'One game. The first player to get rid of every card wins.'}
+        </Text>
+      </View>
+
       <View style={styles.block}>
         <Text style={t.heading}>Opponents</Text>
         <View style={styles.stepper}>

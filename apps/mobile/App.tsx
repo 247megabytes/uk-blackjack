@@ -27,8 +27,8 @@ function Root() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
 
   const newSetup = useCallback(
-    (): MatchSetup => ({ seed: randomSeed(), humanName: settings.playerName, botCount: settings.botCount }),
-    [settings.playerName, settings.botCount],
+    (): MatchSetup => ({ seed: randomSeed(), humanName: settings.playerName, botCount: settings.botCount, mode: settings.mode }),
+    [settings.playerName, settings.botCount, settings.mode],
   );
 
   // Android back button: game → confirm handled in-game; other screens → home.

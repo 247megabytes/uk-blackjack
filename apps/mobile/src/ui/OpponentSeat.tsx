@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, cancelAnimation } from 'react-native-reanimated';
 import type { PublicPlayer } from '@ukbj/game-engine';
-import { initials } from '../game';
+import { initials, ordinal } from '../game';
 import { CardBack } from './PlayingCard';
 import { colors, radius } from './theme';
 
@@ -45,13 +45,16 @@ export function OpponentSeat({ player, colour, isTurn, catchable, flash }: Props
   const fan = Math.min(player.cardCount, 5);
   const state = isTurn ? ', their turn' : '';
   const lastCard = player.cardCount === 1 ? (player.declaredLastCard ? ', on last card' : ', on one card, not declared') : '';
+  const finished = player.status === 'finished';
+  const left = player.status === 'forfeited';
+  const label = finished
+    ? `${player.name}, finished ${ordinal(player.place ?? 0)} this round`
+    : left
+      ? `${player.name}, left the game`
+      : `${player.name}, ${player.cardCount} ${player.cardCount === 1 ? 'card' : 'cards'}${lastCard}${state}`;
 
   return (
-    <Animated.View
-      style={[styles.seat, shakeStyle]}
-      accessible
-      accessibilityLabel={`${player.name}, ${player.cardCount} ${player.cardCount === 1 ? 'card' : 'cards'}${lastCard}${state}`}
-    >
+    <Animated.View style={[styles.seat, shakeStyle, left && styles.seatLeft]} accessible accessibilityLabel={label}>
       <View style={styles.avatarWrap}>
         <Animated.View style={[styles.ring, ringStyle]} />
         <View style={[styles.avatar, { backgroundColor: colour }]}>
@@ -69,7 +72,11 @@ export function OpponentSeat({ player, colour, isTurn, catchable, flash }: Props
           <CardBack key={i} size="mini" style={{ marginLeft: i === 0 ? 0 : -12, transform: [{ rotate: `${(i - (fan - 1) / 2) * 7}deg` }] }} />
         ))}
       </View>
-      {player.cardCount === 1 ? (
+      {finished ? (
+        <Text style={[styles.badge, styles.badgeDone]}>{`${ordinal(player.place ?? 0)} · out`}</Text>
+      ) : left ? (
+        <Text style={[styles.badge, styles.badgeLeft]}>Left</Text>
+      ) : player.cardCount === 1 ? (
         <Text style={[styles.badge, catchable ? styles.badgeCatch : styles.badgeSafe]}>{catchable ? 'Forgot!' : 'Last card'}</Text>
       ) : null}
     </Animated.View>
@@ -120,4 +127,7 @@ const styles = StyleSheet.create({
   badge: { marginTop: 2, fontSize: 11, fontWeight: '700', paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.pill, overflow: 'hidden' },
   badgeSafe: { color: colors.ink, backgroundColor: colors.brass },
   badgeCatch: { color: '#FFF6F2', backgroundColor: colors.red },
+  badgeDone: { color: colors.ink, backgroundColor: colors.win },
+  badgeLeft: { color: colors.text, backgroundColor: colors.surfaceRaised },
+  seatLeft: { opacity: 0.5 },
 });
