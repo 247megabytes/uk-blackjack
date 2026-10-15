@@ -8,15 +8,19 @@ Knockouts tournament) and the tests in `packages/game-engine/test` are the execu
 1. Runs go **up or down** in the same suit.
 2. **Unified pickups:** 2s (+2) and black Jacks (+5) build one shared pick-up. Either can answer
    the other, and a **red Jack cancels the whole pick-up**.
-3. **After a black Jack** only another black Jack, a 2 or a red Jack may follow.
+3. **Persistent pick-ups:** once a 2 or black Jack makes a pick-up live, only another 2, black Jack
+   or red Jack may be played until a red Jack cancels it. An ordinary card can never cover or
+   cancel a live pick-up (J♣ → 2♦ → 3♦ and 2♠ → 3♠ are refused).
 4. **Any pick-up ends the turn.** A drawn card can only be played on a later turn. PASS is retired.
 5. **Power cards only work at the end of a sequence.** A power card followed later by a normal card
    has no effect.
-6. **Aces:** played on their own at any time, or as the last card of a descending same-suit run
-   (3♥ 2♥ A♥). The player calls a suit and the turn ends.
+6. **Aces:** played on their own at any time. The one exception: an Ace may end the player's own
+   run of 2s in its suit (3♥ 2♥ A♥), cancelling that pick-up. The player calls a suit and the turn
+   ends.
 7. Queen covering is unchanged.
 8. **Ending your hand on a 2, 8, J, Q, K or A is allowed but doesn't win.** The card takes
-   effect and you pick up one card.
+   effect and you pick up one card. **Drawing takes priority over extra turns:** after any
+   automatic pick-up, play never bounces straight back to that player.
 9. **A winning go-out requires Last Card**, declared with the final play or earlier.
 10. **Knockouts mode** is added alongside Classic.
 
@@ -40,11 +44,17 @@ A turn is an ordered sequence of cards, submitted together.
    - **one number up or down in the same suit** (v1.2). Runs use A(=1), 2 … 10: 5♠ → 6♠ → 7♠ and
      9♥ → 8♥ → 7♥ are both fine. Jack, Queen and King never form runs. Same-rank steps can be mixed
      in (6♠ → 5♠ → 5♦ → 4♦).
-3. **Pickup cards work together:** after a 2, any Jack may also follow (2♠ → J♣ makes 7).
-4. **After a black Jack:** only another black Jack, any 2 or any red Jack (`BLACK_JACK_FOLLOW`). No
-   ordinary card, Queen, King, 8 or Ace.
-5. **An Ace mid-turn** may only end a descending run in its own suit (2♥ → A♥), or cover a Queen of
-   its suit (Q♥ → A♥). **Nothing may follow an Ace** (`ACE_MUST_BE_LAST`).
+3. **Live pick-ups (correction, 2026-10-15):** once a 2 or a black Jack has been played — or a
+   pick-up was already pending when the turn began — the pick-up is **live**. Until a red Jack
+   cancels it, only another **2, black Jack or red Jack** may follow (`PICKUP_LIVE`;
+   `BLACK_JACK_FOLLOW` straight after a black Jack; `MUST_ANSWER_ATTACK` against an incoming pick-up).
+   No ordinary card, Queen, King or 8. Examples: 2♠ → J♣ = 7 ✓; J♣ → 2♦ → 3♦ ✗; 2♠ → 3♠ ✗;
+   Q♥ → 2♥ ✓ (attacks), Q♥ → 2♥ → 3♥ ✗. After the red Jack, normal sequence rules resume.
+4. **The Ace exception (confirmed):** an Ace of the same suit may end the player's **own** run of
+   2s (3♥ → 2♥ → A♥, 2♠ → 2♥ → A♥), cancelling that pick-up. Not after a black Jack, and never
+   against a pick-up that was pending when the turn began (Aces cannot interrupt a pick-up).
+5. **Otherwise an Ace** is played on its own, or as a Queen's cover in its suit (Q♥ → A♥). **Nothing
+   may follow an Ace** (`ACE_MUST_BE_LAST`).
 6. **After a Queen:** a card of the Queen's suit (see Queens).
 7. Every transition is validated before anything changes. A rejected sequence leaves the game
    exactly as it was.
@@ -59,28 +69,29 @@ A turn is an ordered sequence of cards, submitted together.
 ## Power cards
 | Card | Effect |
 |---|---|
-| **Black Jack** (J♠ J♣) | Adds 5 to the pick-up. Only a black Jack, a 2 or a red Jack may follow it. |
-| **2** | Adds 2 to the pick-up. 2s and black Jacks share one total (2♠ → J♣ = 7, J♠ → 2♦ → J♣ = 12). |
+| **Black Jack** (J♠ J♣) | Adds 5 to the pick-up. Makes the pick-up live: only a black Jack, a 2 or a red Jack may follow. |
+| **2** | Adds 2 to the pick-up. 2s and black Jacks share one total (2♠ → J♣ = 7, J♠ → 2♦ → J♣ = 12). Makes the pick-up live. |
 | **Red Jack** (J♥ J♦) | Cancels the whole pending pick-up, however it was built (2♠ → J♣ → J♥ = cancelled). Normal sequence rules continue afterwards (confirmed). Otherwise a normal card. |
-| **King** | Reverses direction. With two players left in the game, the same player goes again. |
-| **8** | Skips the next player. With two players left, the same player goes again. |
+| **King** | Reverses direction. With two players left in the game, play bounces back to the same player (unless they just had to pick up — see below). |
+| **8** | Skips the next player. With two players left, play bounces back to the same player (unless they just had to pick up). |
 | **Queen** | Must be covered immediately by a card of the same suit (below). |
-| **Ace** | Wild: on its own at any time (not on a live pick-up), or ending a descending same-suit run. The player calls the suit and the turn ends. Never the winning card. |
+| **Ace** | Wild: on its own at any time (never on a pick-up played against you), or ending your own run of 2s in its suit. The player calls the suit and the turn ends. Never the winning card. |
 
 ### Power cards inside a sequence (v1.2, confirmed)
 - Only the **final block** of consecutive power cards (2, 8, J, K) takes effect. Every card in that
   block counts: 2♠ 2♥ = pick up 4, 8♠ 8♥ = skip two, K♠ K♥ = reverse twice, J♠ J♣ = pick up 10.
-- A power card followed later by a **normal card** does nothing. In 7♠ 8♠ 9♠ the 9 covers the 8,
-  so nobody is skipped. In 2♠ 3♠ the 3 cancels the 2's pick-up. In 8♠ 9♠ 9♦ 8♦ only the last 8
-  skips. The engine emits `POWER_COVERED` for covered power cards.
-- Examples from the brief: 2♠ 3♠ = no pick-up; 3♠ 2♠ = pick up 2; 8♠ 9♠ = no skip; 3♥ 2♥ A♥ = no
-  pick-up from the 2 (the Ace covers it). Every card in a final run of 8s or Kings counts
-  (confirmed): 7♠ 8♠ 8♥ skips two players.
+- An **8 or King** followed later by a **normal card** does nothing. In 7♠ 8♠ 9♠ the 9 covers the 8,
+  so nobody is skipped. In 8♠ 9♠ 9♦ 8♦ only the last 8 skips. The engine emits `POWER_COVERED` for
+  covered power cards.
+- **Pick-up cards can't be covered** by a normal card (live pick-ups, above). The only way to cover a
+  2 is the Ace exception (3♥ 2♥ A♥ = no pick-up).
+- Examples: 3♠ 2♠ = pick up 2; 8♠ 9♠ = no skip; 3♥ 2♥ A♥ = no pick-up. Every card in a final run of
+  8s or Kings counts (confirmed): 7♠ 8♠ 8♥ skips two players. *The brief's example "2♠ 3♠ = no
+  pick-up" is superseded by the live-pick-up correction: 2♠ 3♠ is now refused.*
 - Inside the final block, cards apply in order: a red Jack after your own black Jack (J♠ J♦)
   cancels it; 2♠ J♣ = 7.
 - **Answering a pick-up always counts.** The cards that answer an incoming pick-up, up to and
-  including a cancelling red Jack, always take effect, even if more cards follow afterwards. Only
-  the cards after that are subject to the final-block rule.
+  including a cancelling red Jack, always take effect, even if more cards follow afterwards.
 - **Stacking across turns is unchanged.** A 2 attack can be answered with more 2s, and so on.
 - Skips and reverses resolve at the end of the turn: the final direction is used, and play moves
   1 + (number of 8s) active seats (+1 per King when only two players are left in the game).
@@ -138,6 +149,14 @@ A turn is an ordered sequence of cards, submitted together.
   3. your turn ends;
   4. no winner is declared.
 - The automatic pick-up never cancels the pick-up, skip or reverse that the card created.
+- **Drawing takes priority over extra turns (correction, 2026-10-15).** If the player's 8s or Kings
+  would bring play straight back to them after the automatic pick-up (1v1, or e.g. 8♠ 8♥ 8♦ with
+  four players), the turn passes to the **next player in the current direction** instead. In 1v1 the
+  opponent plays next (confirmed). Without a pick-up, 1v1 bounce-back is unchanged. With 3+ players,
+  a final 8 still skips the next player, since no extra turn is involved.
+- The same applies to every automatic pick-up: the Queen pick-up, and a **Last Card catch** (confirmed).
+  A player caught on one card picks up 2 and loses any bounce-back their 8s or Kings would have given
+  them. Declaring in time keeps it.
 - Event `FINISH_BLOCKED`, draw reason `blockedFinish` (or `queenPenalty`).
 - The Queen's covering duty still applies. If you hold a same-suit cover you must use it, even if
   the cover is itself a power card ending your hand (Q♥ 2♥ attacks, then you pick up one).
@@ -192,18 +211,24 @@ A tournament for 2–6 players, played as a chain of **knockout rounds**.
   after the automatic pick-up.
 - A Queen can still be covered by the Ace of its suit.
 - Normal sequence rules continue after a red Jack cancels a pick-up.
+- **Correction 1:** a live pick-up allows only 2s, black Jacks and red Jacks until a red Jack cancels
+  it. J♣ 2♦ 3♦ and 2♠ 3♠ are refused.
+- **The Ace exception is kept:** 3♥ 2♥ A♥ is legal and cancels the player's own pick-up of 2s.
+- **Correction 2:** drawing takes priority over extra turns. In 1v1, after an automatic pick-up the
+  opponent plays next; without a pick-up, 8s and Kings still bounce back.
+- A Last Card catch counts as a pick-up: no extra turn after being caught.
 
 ## Interpretations awaiting sign-off (v1.2)
 These were not specified. The engine implements the choice shown, each covered by a test.
-1. **Answering a pick-up always counts** even if later cards follow, so a red Jack's cancel can't be
-   "covered" and undone.
-2. **Literal Black Jack restriction:** it only governs the card directly after a black Jack.
-   J♣ → 2♦ → 3♦ is legal, and the 3 covers both, so there is no pick-up.
+1. **The Ace exception covers only the player's own 2s.** It doesn't apply after a black Jack in the
+   same live pick-up, or against a pick-up that was pending when the turn began.
+2. **When play would bounce back after an automatic pick-up with 3+ players** (e.g. 8♠ 8♥ 8♦ with
+   four), the turn goes to the next player in the current direction, and the remaining skips are
+   dropped.
 3. **Forfeiting while facing a pick-up clears it** instead of passing it to the next player.
 4. **A forfeit that leaves one player holding cards ends the round without eliminating them.**
 5. **Surviving holders in a stalled round are ranked by fewest cards, then seat.**
-6. **Two-player behaviour (King = skip, 8 = go again) uses the number of players still active** in
-   the round. This also applies after a blocked finish: a final 8 with two players left gives the
-   same player another turn with the card they just picked up.
+6. **Two-player behaviour (King = skip, 8 = bounce back) uses the number of players still active**
+   in a Knockouts round.
 7. **Finished players cannot challenge Last Card** for the rest of the round.
 8. **Each round's first player is random** (seeded); the round winner does not lead the next round.

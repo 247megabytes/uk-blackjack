@@ -370,13 +370,20 @@ function doPlayCards(w: Work, playerId: PlayerId, plays: readonly CardPlay[], de
     }
   }
 
+  // Drawing takes priority over extra turns: after an automatic pick-up (blocked finish or
+  // Queen penalty) play never comes straight back to this player, even when 8s or Kings
+  // (two players: King = skip) would bounce it back. It passes to the next player instead.
+  let next = stepIndex(w, steps);
+  if ((outcome.blockedFinish || outcome.queenPenalty) && next === idx) next = stepIndex(w, 1);
+
   if (needsWindow) {
     w.phase = 'lastCardWindow';
-    w.lastCardWindow = { playerId, resumePlayerIndex: stepIndex(w, steps) };
+    w.lastCardWindow = { playerId, resumePlayerIndex: next };
     emit(w, { type: 'LAST_CARD_WINDOW_OPENED', playerId });
     return;
   }
-  endTurn(w, steps);
+  if (checkStalemateInPlace(w)) return;
+  startTurn(w, next);
 }
 
 /**
@@ -453,6 +460,12 @@ function doChallenge(w: Work, challengerId: PlayerId, targetId: PlayerId): void 
   const targetIndex = w.players.findIndex((p) => p.id === targetId);
   emit(w, { type: 'LAST_CARD_CHALLENGED', challengerId, targetPlayerId: targetId });
   drawCards(w, targetIndex, w.rules.lastCardPenalty, 'lastCardPenalty');
+  // Being caught is a pick-up too, so it cancels any extra turn the player's 8s/Kings
+  // would have given them (confirmed): play moves on to the next player.
+  const window = w.lastCardWindow;
+  if (window && window.resumePlayerIndex === targetIndex) {
+    w.lastCardWindow = { ...window, resumePlayerIndex: stepIndex(w, 1, targetIndex) };
+  }
   closeWindow(w);
 }
 

@@ -92,10 +92,10 @@ describe('v1.2 rule 4 — power cards only act when final', () => {
     expect(resolvePlays(ctx(['2S', '2H', ...filler], '2D'), [{ cardId: '2S' }, { cardId: '2H' }], P).attack).toEqual({ kind: 'two', amount: 4 });
   });
 
-  it('a 2 covered by a run card does nothing (3♠ 2♠ → no; 2♠ 3♠ → no pickup); a final black Jack attacks', () => {
-    const covered = act(scenario({ hands: [['2S', '3S', ...filler], ['4D'], ['4H']], top: '2H' }), seq('p1', ['2S', '3S']));
-    expect(covered.pendingAttack).toBeNull();
-    expect(covered.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: '2S' }] });
+  it('a 2 can no longer be covered by a run card (2♠ 3♠ refused); 8s still can (8♠ 9♠ no skip); a final black Jack attacks', () => {
+    expect(reject(scenario({ hands: [['2S', '3S', ...filler], ['4D'], ['4H']], top: '2H' }), seq('p1', ['2S', '3S']))).toBe('PICKUP_LIVE');
+    const eight = act(scenario({ hands: [['8S', '9S', ...filler], ['4D'], ['4H']], top: '8H' }), seq('p1', ['8S', '9S']));
+    expect(eight.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: '8S' }] });
     const attacked = act(scenario({ hands: [['JD', 'JS', ...filler], ['4D'], ['4H']], top: 'JH' }), seq('p1', ['JD', 'JS']));
     expect(attacked.pendingAttack).toEqual({ kind: 'blackJack', amount: 5 });
   });
@@ -132,7 +132,7 @@ describe('v1.2 rule 5 — Aces must end the sequence', () => {
   it('an Ace after a same-rank step or a different suit is refused', () => {
     const s = scenario({ hands: [['7S', '7D', 'AC', '2H', 'AS', ...filler], ['4D']], top: '7H' });
     expect(reject(s, seq('p1', ['7S', '7D', 'AC>H']))).toBe('INVALID_SEQUENCE');
-    expect(reject(scenario({ hands: [['2H', 'AS', '3C', '9D'], ['4D']], top: '2C' }), seq('p1', ['2H', 'AS>S']))).toBe('INVALID_SEQUENCE');
+    expect(reject(scenario({ hands: [['2H', 'AS', '3C', '9D'], ['4D']], top: '2C' }), seq('p1', ['2H', 'AS>S']))).toBe('PICKUP_LIVE');
   });
 
   it('anything after an Ace is refused with ACE_MUST_BE_LAST', () => {

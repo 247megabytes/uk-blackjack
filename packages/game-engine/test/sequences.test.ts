@@ -88,10 +88,10 @@ describe('multi-card sequences — power cards (v1.2: only the final power block
     expect(current(s)).toBe('p3');
   });
 
-  it('stacked 2s covered by a normal card are all cancelled (3♠ 2♠ 2♣ 3♣)', () => {
-    const s = act(scenario({ hands: [['3S', '2S', '2C', '3C', '9D'], ['4D'], ['4H']], top: '3H' }), seq('p1', ['3S', '2S', '2C', '3C']));
-    expect(s.pendingAttack).toBeNull();
-    expect(s.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: '2S' }, { id: '2C' }] });
+  it('persistent pick-up: stacked 2s cannot be covered by a normal card (3♠ 2♠ 2♣ 3♣ is refused); 3♠ 2♠ 2♣ attacks for 4', () => {
+    const s0 = scenario({ hands: [['3S', '2S', '2C', '3C', '9D'], ['4D'], ['4H']], top: '3H' });
+    expect(reject(s0, seq('p1', ['3S', '2S', '2C', '3C']))).toBe('PICKUP_LIVE');
+    expect(act(s0, seq('p1', ['3S', '2S', '2C'])).pendingAttack).toEqual({ kind: 'two', amount: 4 });
   });
 
   it('a stacked power block at the end all counts even after normal cards: 6♠ 7♠ 8♠ 8♥ skips two', () => {
@@ -149,11 +149,8 @@ describe('multi-card sequences — power cards (v1.2: only the final power block
     expect(s2.pendingAttack).toBeNull();
   });
 
-  it('covering your own 2 with a normal card cancels its power (confirmed)', () => {
-    const s = act(scenario({ hands: [['2S', '3S', '4S', '9C', '10D'], ['5D', '6D'], ['5H']], top: '2D' }), seq('p1', ['2S', '3S', '4S']));
-    expect(s.pendingAttack).toBeNull();
-    expect(s.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: '2S' }] });
-    expect(current(s)).toBe('p2');
+  it('v1.2 correction: a normal card can no longer cover your own 2 (2♠ 3♠ 4♠ is refused)', () => {
+    expect(reject(scenario({ hands: [['2S', '3S', '4S', '9C', '10D'], ['5D', '6D'], ['5H']], top: '2D' }), seq('p1', ['2S', '3S', '4S']))).toBe('PICKUP_LIVE');
   });
 
   it('two players: one final 8 gives another turn; two skips pass to the opponent', () => {

@@ -214,6 +214,29 @@ Implements the complete v1.2 brief on top of the first v1.2 pass, plus the four 
 **Not verified:** real-device feel on the iPhone (that's your check), and stalled rounds arising
 naturally (covered by forced-stall engine tests).
 
+## v1.2 final corrections ✅ (2026-10-15)
+
+**Changed**
+- **Persistent pick-ups:** a 2 or black Jack makes the pick-up live, and only 2s, black Jacks and red
+  Jacks may follow until a red Jack cancels it (`PICKUP_LIVE`). J♣ 2♦ 3♦ and 2♠ 3♠ are now refused.
+  Confirmed exception: an Ace of the suit may end the player's own run of 2s (3♥ 2♥ A♥), cancelling
+  it.
+- **Drawing beats extra turns:** after a blocked-finish pick-up, a Queen pick-up or a Last Card catch
+  (confirmed), play never bounces straight back to that player; it passes to the next player. 1v1
+  bounce-back without a pick-up is unchanged (confirmed).
+- Rules doc: interpretations 2 (literal black-Jack rule) and 6 (1v1 extra turn after a blocked finish)
+  removed as contradicted; the brief's "2♠ 3♠ = no pick-up" example marked superseded. How to Play
+  updated.
+
+**Verified (in the build sandbox)**
+- `npm run test:offline`: 361 tests, 361 pass, 0 fail. New `corrections.test.ts` (both corrections,
+  incl. Knockouts); 8 tests rewritten where the corrections overturn earlier behaviour.
+- Strict TypeScript clean; the app typechecks against real React Native typings.
+- 10,000 Classic games and 10,000 Knockouts tournaments (2,000 each for 2–6 players), plus 3,000 +
+  3,000 with random disconnects: 0 violations, 0 rejected bot moves.
+- Mutation checks: 2s not making pick-ups live (19 failing tests), Ace exception removed (8), Ace
+  cancelling any pick-up (1), extra turn after an automatic pick-up (5), extra turn after a catch (1).
+
 ## Phase 3 — Multiplayer ⏳ next
 
 ## Phase 4 — Polish

@@ -166,11 +166,17 @@ describe('tap-to-build sequences', () => {
     expect(buildPlay(v, tapIds(v, ['7S', '8S']), true)).toMatchObject({ declareLastCard: true });
   });
 
-  it('shows the attack the sequence will leave behind, and that covering a 2 cancels it', () => {
-    const v = viewOf(['2H', '3H', '9C'], '9H');
+  it('shows the pick-up a 2 leaves behind; once it is live only 2s and Jacks light up (an ordinary card cannot cover it)', () => {
+    const v = viewOf(['2H', '3H', '2C', 'JD', '9C'], '9H');
     const a = selectionState(v, tapIds(v, ['2H']));
     expect(a.kind === 'ready' && a.outcome.attack).toEqual({ kind: 'two', amount: 2 });
-    const b = selectionState(v, tapIds(v, ['2H', '3H']));
-    expect(b.kind === 'ready' && b.outcome.attack).toBeNull();
+    expect([...selectableCardIds(v, tapIds(v, ['2H']))].sort()).toEqual(['2C', 'JD']);
+    const r = tapCard(v, tapIds(v, ['2H']), parseCard('3H'));
+    expect(r.kind).toBe('rejected');
+  });
+
+  it('the Ace exception: 3♥ 2♥ lights A♥ (which cancels the pick-up), but not A♠', () => {
+    const v = viewOf(['3H', '2H', 'AH', 'AS', '9C'], '3S');
+    expect([...selectableCardIds(v, tapIds(v, ['3H', '2H']))]).toEqual(['AH']);
   });
 });

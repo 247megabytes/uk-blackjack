@@ -6,12 +6,12 @@ import { Screen } from './Screen';
 
 const POWERS: { cards: string[]; title: string; body: string }[] = [
   { cards: ['JS', 'JC'], title: 'Black Jacks', body: 'Add 5 to the pick-up. After a black Jack you can only play another black Jack, a 2 or a red Jack.' },
-  { cards: ['2H', '2C'], title: 'Twos', body: 'Add 2 to the pick-up. 2s and black Jacks build the same total: 2♠ then J♣ makes 7.' },
+  { cards: ['2H', '2C'], title: 'Twos', body: 'Add 2 to the pick-up. 2s and black Jacks build the same total: 2♠ then J♣ makes 7. Once a pick-up is live, only a 2, a black Jack or a red Jack can follow.' },
   { cards: ['JH', 'JD'], title: 'Red Jacks', body: 'Cancel the whole pick-up, however it was built. You can keep playing after it. Otherwise a normal card.' },
   { cards: ['KD'], title: 'Kings', body: 'Reverse the direction of play. With two players, you go again.' },
   { cards: ['8S'], title: 'Eights', body: 'Skip the next player. With two players, you go again.' },
   { cards: ['QH', '6H'], title: 'Queens', body: 'Must be covered straight away by a card of the same suit. Can’t cover? Pick up one card and your turn ends.' },
-  { cards: ['AS', 'AD'], title: 'Aces', body: 'Wild: play one on its own at any time — or to end a run going down in its suit (3♥ 2♥ A♥) — then call the next suit. Your turn ends. Not while a pick-up is live.' },
+  { cards: ['AS', 'AD'], title: 'Aces', body: 'Wild: play one on its own at any time, then call the next suit. Your turn ends. One exception: an Ace can end your own run of 2s in its suit (3♥ 2♥ A♥), which cancels that pick-up. Never on a pick-up played against you.' },
 ];
 
 export function HowToPlayScreen({ onBack }: { onBack: () => void }) {
@@ -44,16 +44,16 @@ export function HowToPlayScreen({ onBack }: { onBack: () => void }) {
         </View>
       ))}
       <Section title="Power cards only count at the end">
-        A power card (2, 8, Jack, King) only works if it’s the last card you play — or part of a run of power cards at the very end. 2♠ 3♠ picks up nothing and 8♠ 9♠ skips nobody, because the later card covers the power card. 3♠ 2♠ makes the next player pick up 2. 8♠ 8♥ at the end skips two players, and 2♠ 2♥ makes the next player pick up 4.
+        An 8 or a King only works if it’s the last card you play — or part of a run of them at the very end. 8♠ 9♠ skips nobody, because the 9 covers the 8, but 8♠ 8♥ at the end skips two players. Pick-ups are different: once you play a 2 or a black Jack, only more 2s, black Jacks or a red Jack can follow, so 2♠ 3♠ isn’t allowed. 3♠ 2♠ makes the next player pick up 2, and 2♠ 2♥ makes it 4.
       </Section>
       <Section title="Under attack">
         When a pick-up is waiting for you, add to it with any 2 or black Jack — as many as you like — to pass it along, play a red Jack to cancel the whole thing, or take the cards and your turn ends. Nothing else can be played on a pick-up.
       </Section>
       <Section title="Last Card">
-        When your play leaves you with one card, tap the brass Last Card button first. Forget, and you get a moment to say it late — but if someone catches you first, you pick up 2. You can catch the bots too. To play out your whole hand, you must say Last Card first — the game won’t let the play through until you do.
+        When your play leaves you with one card, tap the brass Last Card button first. Forget, and you get a moment to say it late — but if someone catches you first, you pick up 2 and lose any extra turn your 8 or King would have given you. You can catch the bots too. To play out your whole hand, you must say Last Card first — the game won’t let the play through until you do.
       </Section>
       <Section title="Going out">
-        To win, your final card must be an ordinary card and you must have said Last Card. You can still play out your hand on a 2, 8, Jack, Queen, King or Ace — its power still works — but you don’t win: you pick up one card and your turn ends. The tray tells you which will happen before you play.
+        To win, your final card must be an ordinary card and you must have said Last Card. You can still play out your hand on a 2, 8, Jack, Queen, King or Ace — its power still works — but you don’t win: you pick up one card and your turn ends. Picking up always beats an extra turn, so even if your 8 or King would bring play back to you, it passes to the next player. The tray tells you which will happen before you play.
       </Section>
       <Section title="Knockouts">
         A tournament for 2–6 players. Each round deals seven cards each. Get rid of your cards to finish safely — finishers sit out the rest of the round in the order they went out. The last player still holding cards is knocked out, and everyone else goes through to a fresh round. When two are left, the first to empty their hand in the final is champion. If a round stalls, whoever holds the most cards goes out.

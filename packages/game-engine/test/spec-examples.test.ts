@@ -90,7 +90,7 @@ describe('4. Drawing always ends the turn', () => {
 });
 
 describe('5. Only the top card activates its power', () => {
-  it('2♠ → 3♠ = no pickup', () => expect(act(four(['2S', '3S'], '2D'), seq('p1', ['2S', '3S'])).pendingAttack).toBeNull());
+  it('2♠ → 3♠ is refused (correction 1 supersedes the brief\'s "no pickup" example)', () => expect(reject(four(['2S', '3S'], '2D'), seq('p1', ['2S', '3S']))).toBe('PICKUP_LIVE'));
   it('3♠ → 2♠ = pickup 2', () => expect(act(four(['3S', '2S'], '3D'), seq('p1', ['3S', '2S'])).pendingAttack?.amount).toBe(2));
   it('8♠ → 9♠ = no skip', () => expect(current(act(four(['8S', '9S'], '8D'), seq('p1', ['8S', '9S'])))).toBe('p2'));
   it('K♥ → K♣ → 7♣ = no reverse', () => {
@@ -120,7 +120,7 @@ describe('6. Wild Aces', () => {
   });
   it('3♥ → 2♥ → A♥ is valid; the Ace must match the run’s suit and be last', () => {
     expect(act(four(['3H', '2H', 'AH'], '3S'), seq('p1', ['3H', '2H', 'AH>S'])).activeSuit).toBe('S');
-    expect(reject(four(['3H', '2H', 'AS'], '3S'), seq('p1', ['3H', '2H', 'AS>S']))).toBe('INVALID_SEQUENCE');
+    expect(reject(four(['3H', '2H', 'AS'], '3S'), seq('p1', ['3H', '2H', 'AS>S']))).toBe('PICKUP_LIVE');
   });
   it('a Queen can still be covered by the Ace of its suit (confirmed)', () => {
     expect(act(four(['QH', 'AH'], '9H'), seq('p1', ['QH', 'AH>C'])).activeSuit).toBe('C');
@@ -163,12 +163,12 @@ describe('9. Last Card with multi-card finishing sequences', () => {
 });
 
 describe('regression: answering a pick-up always counts', () => {
-  it('J♥ (cancel) → J♠ → 2♠ → 3♠ under a pick-up: the cancel stands, the later powers are covered, nothing is pending', () => {
+  it('J♥ (cancel) → J♠ → 2♠ under a pick-up: the cancel stands and the new pick-up of 7 is live', () => {
     const s = scenario({ hands: [['5C', ...F], ['JH', 'JS', '2S', '3S', '9H'], ['5H', '6H'], ['8C', '7C']], top: '2D', pendingAttack: { kind: 'two', amount: 6 }, current: 1 });
-    const after = act(s, seq('p2', ['JH', 'JS', '2S', '3S']));
-    expect(after.pendingAttack).toBeNull();
+    const after = act(s, seq('p2', ['JH', 'JS', '2S']));
+    expect(after.pendingAttack).toEqual({ kind: 'two', amount: 7 });
     expect(after.events.find((e) => e.type === 'ATTACK_CANCELLED')).toMatchObject({ cancelledAmount: 6 });
-    expect(after.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: 'JS' }, { id: '2S' }] });
     expect(findInvariantViolations(after)).toEqual([]);
+    expect(reject(s, seq('p2', ['JH', 'JS', '2S', '3S']))).toBe('PICKUP_LIVE'); // nothing ordinary can cover the new pick-up
   });
 });

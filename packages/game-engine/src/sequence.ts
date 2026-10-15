@@ -89,17 +89,57 @@ export function incomingAttackLive(ctx: PlayContext, played: readonly Card[]): b
 }
 
 /**
- * Can `next` follow `prev` inside one turn? `live` says whether an incoming pickup is
- * still live at this point (see incomingAttackLive); it defaults to "a pickup was
- * pending and nothing has cancelled it", which is right unless a red Jack was played.
+ * Pick-up state at a point in a turn (v1.2 persistent pickup restriction):
+ *  - `live`: a pick-up is active — the one pending when the turn began, or one started in
+ *    this turn by a 2 or black Jack — and no red Jack has cancelled it yet. While live,
+ *    only a 2, a black Jack or a red Jack may be played.
+ *  - `aceMayEnd`: the one confirmed exception — an Ace of the same suit may end a run
+ *    after a 2 (3♥ 2♥ A♥), cancelling that pick-up. Only allowed when the live pick-up was
+ *    started in this turn by 2s alone (never against an incoming pick-up or a black Jack).
  */
-export function isLegalStep(ctx: PlayContext, prev: Card, _prevChosenSuit: Suit | undefined, next: Card, live = ctx.pendingAttack !== null && !isRedJack(prev)): boolean {
+export interface PickupState {
+  readonly live: boolean;
+  readonly aceMayEnd: boolean;
+}
+
+export function pickupState(ctx: PlayContext, played: readonly Card[]): PickupState {
+  let live = ctx.pendingAttack !== null;
+  let incoming = live;
+  let blackJack = false;
+  for (const c of played) {
+    if (isRedJack(c)) {
+      if (live) {
+        live = false;
+        incoming = false;
+        blackJack = false;
+      }
+    } else if (c.rank === '2' || isBlackJack(c)) {
+      live = true;
+      if (isBlackJack(c)) blackJack = true;
+    }
+  }
+  return { live, aceMayEnd: live && !incoming && !blackJack };
+}
+
+/**
+ * Can `next` follow `prev` inside one turn? `state` is the pick-up state after the cards
+ * played so far (see pickupState). The default is derived from `prev` alone, which is
+ * exact for two-card sequences.
+ */
+export function isLegalStep(
+  ctx: PlayContext,
+  prev: Card,
+  _prevChosenSuit: Suit | undefined,
+  next: Card,
+  state: PickupState = pickupState(ctx, [prev]),
+): boolean {
   if (prev.rank === 'A') return false; // an Ace always ends the sequence
-  if (live) return isPickupCard(next); // answering a pickup: 2s and Jacks only
-  if (isBlackJack(prev)) return isPickupCard(next); // black Jack → black Jack, any 2, any red Jack
+  if (state.live) {
+    if (next.rank === 'A') return state.aceMayEnd && isRunStep(prev, next); // 3♥ 2♥ A♥ only
+    return isPickupCard(next); // a live pick-up: only 2s, black Jacks and red Jacks
+  }
   if (prev.rank === 'Q') return next.suit === prev.suit; // the cover (incl. that suit's Ace)
-  if (next.rank === 'A') return isRunStep(prev, next); // only as the end of a descending run: 2♥ → A♥
-  if (prev.rank === '2' && next.rank === 'J') return true; // pickups work together: 2 → any Jack
+  if (next.rank === 'A') return false; // otherwise an Ace is only ever played on its own
   return next.rank === prev.rank || isRunStep(prev, next);
 }
 
@@ -119,8 +159,8 @@ export function nextCardOptions(ctx: PlayContext, prefix: readonly CardPlay[]): 
   const prev = cardById(ctx.hand, last.cardId);
   if (!prev) return [];
   const played = prefix.map((p) => cardById(ctx.hand, p.cardId)).filter((c): c is Card => c !== undefined);
-  const live = incomingAttackLive(ctx, played);
-  return remaining.filter((c) => isLegalStep(ctx, prev, last.chosenSuit, c, live));
+  const state = pickupState(ctx, played);
+  return remaining.filter((c) => isLegalStep(ctx, prev, last.chosenSuit, c, state));
 }
 
 /** True if some card left after `plays` could legally cover the Queen at the end. */
@@ -185,13 +225,19 @@ export function checkPlays(ctx: PlayContext, plays: readonly CardPlay[], declare
   for (let i = 1; i < cards.length; i++) {
     const prev = cards[i - 1]!;
     const next = cards[i]!;
-    const live = incomingAttackLive(ctx, cards.slice(0, i));
-    if (!isLegalStep(ctx, prev, plays[i - 1]!.chosenSuit, next, live)) {
+    const state = pickupState(ctx, cards.slice(0, i));
+    if (!isLegalStep(ctx, prev, plays[i - 1]!.chosenSuit, next, state)) {
       if (prev.rank === 'A') return gameError('ACE_MUST_BE_LAST', 'An Ace ends your turn — it must be the last card you play');
-      if (live) return gameError('MUST_ANSWER_ATTACK', 'While a pick-up is live you can only add 2s and Jacks');
-      if (isBlackJack(prev)) return gameError('BLACK_JACK_FOLLOW', 'After a black Jack you can only play another black Jack, a 2 or a red Jack');
+      if (state.live) {
+        if (pickupState(ctx, []).live && !cards.slice(0, i).some((c) => isRedJack(c))) {
+          return gameError('MUST_ANSWER_ATTACK', 'A pick-up is waiting for you: only a 2, a black Jack or a red Jack can be played');
+        }
+        if (isBlackJack(prev)) return gameError('BLACK_JACK_FOLLOW', 'After a black Jack you can only play another black Jack, a 2 or a red Jack');
+        if (next.rank === 'A') return gameError('PICKUP_LIVE', 'An Ace can only end your own run of 2s in its suit (3♥ 2♥ A♥) — not a black Jack or an incoming pick-up');
+        return gameError('PICKUP_LIVE', 'Your pick-up is live: only a 2, a black Jack or a red Jack can follow until a red Jack cancels it');
+      }
       if (prev.rank === 'Q') return gameError('QUEEN_MUST_BE_COVERED', `A Queen must be covered by a ${prev.suit === 'H' ? 'heart' : prev.suit === 'D' ? 'diamond' : prev.suit === 'S' ? 'spade' : 'club'}`);
-      if (next.rank === 'A') return gameError('INVALID_SEQUENCE', 'An Ace can only end a run going down in the same suit (2♥ → A♥) — or be played on its own');
+      if (next.rank === 'A') return gameError('INVALID_SEQUENCE', 'An Ace is played on its own — or to end your run of 2s in its suit (3♥ 2♥ A♥)');
       return gameError('INVALID_SEQUENCE', `${next.id} cannot follow ${prev.id}: play the same rank, or the next number up or down in the same suit`);
     }
   }

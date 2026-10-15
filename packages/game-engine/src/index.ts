@@ -27,6 +27,7 @@ export {
   isWinningPlay,
   isPickupCard,
   incomingAttackLive,
+  pickupState,
   isPowerCard,
   isLegalFirstCard,
   isLegalStep,
@@ -36,7 +37,7 @@ export {
   queenCoverAvailable,
   resolvePlays,
 } from './sequence';
-export type { Penalties, PlayContext, PlayEffect, PlayOutcome } from './sequence';
+export type { Penalties, PickupState, PlayContext, PlayEffect, PlayOutcome } from './sequence';
 export {
   createGame,
   dealCards,
