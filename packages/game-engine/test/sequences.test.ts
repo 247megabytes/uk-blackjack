@@ -49,7 +49,8 @@ describe('multi-card sequences — legal transitions', () => {
   it('rejects jumps and runs past 10 (Jack/Queen/King are not numerical)', () => {
     expect(reject(scenario({ hands: [['9S', '7S', '3D'], ['4C']], top: '9H' }), seq('p1', ['9S', '7S']))).toBe('INVALID_SEQUENCE');
     expect(reject(scenario({ hands: [['10S', 'JS', '3D'], ['4C']], top: '10H' }), seq('p1', ['10S', 'JS']))).toBe('INVALID_SEQUENCE');
-    expect(reject(scenario({ hands: [['JS', '10S', '3D'], ['4C']], top: 'JH' }), seq('p1', ['JS', '10S']))).toBe('INVALID_SEQUENCE');
+    expect(reject(scenario({ hands: [['JH', '10H', '3D'], ['4C']], top: 'JC' }), seq('p1', ['JH', '10H']))).toBe('INVALID_SEQUENCE');
+    expect(reject(scenario({ hands: [['JS', '10S', '3D'], ['4C']], top: 'JH' }), seq('p1', ['JS', '10S']))).toBe('BLACK_JACK_FOLLOW');
   });
 
   it('validates every transition, not just the first card', () => {
@@ -68,9 +69,9 @@ describe('multi-card sequences — legal transitions', () => {
   it('nextCardOptions offers exactly the legal next cards', () => {
     const s = scenario({ hands: [['7S', '8S', '7D', '8H', 'KS', 'AC'], ['4C']], top: '7H' });
     const c = ctxOf(s);
-    expect(ids(nextCardOptions(c, []))).toEqual(['7D', '7S', '8H', 'AC']);
-    expect(ids(nextCardOptions(c, [{ cardId: '7S' }]))).toEqual(['7D', '8S', 'AC']);
-    expect(ids(nextCardOptions(c, [{ cardId: '7S' }, { cardId: '8S' }]))).toEqual(['8H', 'AC']);
+    expect(ids(nextCardOptions(c, []))).toEqual(['7D', '7S', '8H', 'AC']); // an Ace on its own is always an option
+    expect(ids(nextCardOptions(c, [{ cardId: '7S' }]))).toEqual(['7D', '8S']); // v1.2: no Ace mid-turn unless it ends 2→A
+    expect(ids(nextCardOptions(c, [{ cardId: '7S' }, { cardId: '8S' }]))).toEqual(['8H']);
   });
 });
 
@@ -105,11 +106,11 @@ describe('multi-card sequences — power cards (v1.2: only the final power block
     expect(s.events.filter((e) => e.type === 'PLAYER_SKIPPED')).toHaveLength(1);
   });
 
-  it('an Ace covering a King cancels the reverse (an Ace counts as a normal card for covering)', () => {
-    const s = act(scenario({ hands: [['KS', 'AS', '3C', '10D'], ['4D'], ['4H']], top: 'KH' }), seq('p1', ['KS', 'AS>D']));
-    expect(s.direction).toBe(1);
-    expect(current(s)).toBe('p2');
-    expect(s.activeSuit).toBe('D');
+  it('v1.2: an Ace can only cover a 2 of its suit (3♥ 2♥ A♥ — no pickup), not a King or 8', () => {
+    expect(reject(scenario({ hands: [['KS', 'AS', '3C', '10D'], ['4D'], ['4H']], top: 'KH' }), seq('p1', ['KS', 'AS>D']))).toBe('INVALID_SEQUENCE');
+    const s = act(scenario({ hands: [['3H', '2H', 'AH', '10D'], ['4D'], ['4H']], top: '3C' }), seq('p1', ['3H', '2H', 'AH>S']));
+    expect(s.pendingAttack).toBeNull();
+    expect(s.activeSuit).toBe('S');
   });
 
   it('three final 8s with four players skip everyone else: the player goes again', () => {
@@ -162,9 +163,11 @@ describe('multi-card sequences — power cards (v1.2: only the final power block
     expect(current(two)).toBe('p2');
   });
 
-  it('a final power card still cannot be the finishing card of a sequence', () => {
-    const s = scenario({ hands: [['7S', '8S'], ['4D']], top: '7H' });
-    expect(reject(s, seq('p1', ['7S', '8S']))).toBe('CANNOT_FINISH_ON_POWER_CARD');
+  it('v1.2: ending the hand on a power card is played (the 8 skips) but does not win — the player picks up 1', () => {
+    const s = act(scenario({ hands: [['7S', '8S'], ['4D', '5D'], ['4H', '5H']], top: '7H', drawPile: ['3C'], leftovers: 'discard' }), seq('p1', ['7S', '8S'], true));
+    expect(s.phase).toBe('playing');
+    expect(hand(s, 'p1')).toEqual(['3C']);
+    expect(current(s)).toBe('p3');
     const win = act(scenario({ hands: [['7S', '8S', '9S'], ['4D']], top: '7H' }), seq('p1', ['7S', '8S', '9S'], true));
     expect(win.winnerId).toBe('p1');
   });
@@ -183,11 +186,14 @@ describe('multi-card sequences — attacks', () => {
     expect(reject(twoAttack(), seq('p2', ['2H', '3H']))).toBe('MUST_ANSWER_ATTACK');
   });
 
-  it('under a black Jack attack: stack, then a red Jack may cancel — and nothing may follow it', () => {
+  it('under a black Jack attack: stack, then a red Jack cancels; normal rules continue after it (confirmed)', () => {
     const bj = () => act(scenario({ hands: [['JS', '5C', '6C'], ['JC', 'JH', 'JD', '4S'], ['9C']], top: '9S' }), play('p1', 'JS'));
     const s = act(bj(), seq('p2', ['JC', 'JH']));
     expect(s.pendingAttack).toBeNull();
-    expect(reject(bj(), seq('p2', ['JH', 'JD']))).toBe('MUST_ANSWER_ATTACK');
+    const s2 = act(bj(), seq('p2', ['JH', 'JD'])); // the second red Jack is an ordinary Jack now
+    expect(s2.pendingAttack).toBeNull();
+    const s3 = act(bj(), seq('p2', ['JH', 'JC'])); // cancel, then a fresh black Jack attack of 5
+    expect(s3.pendingAttack).toEqual({ kind: 'blackJack', amount: 5 });
   });
 });
 

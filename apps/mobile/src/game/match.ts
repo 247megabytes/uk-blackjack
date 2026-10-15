@@ -342,9 +342,13 @@ export type SelectionState =
       readonly kind: 'ready';
       readonly queenPenalty: boolean;
       readonly leavesOne: boolean;
-      /** The play empties the hand: it needs Last Card (armed now, or declared earlier). */
+      /** The play empties the hand. */
       readonly goesOut: boolean;
-      /** goesOut and Last Card has not been declared yet — the button must be armed. */
+      /** The play empties the hand on a winning (ordinary) card. */
+      readonly wins: boolean;
+      /** The play empties the hand on a 2/8/J/Q/K/A: no win, the player picks up one card. */
+      readonly blockedFinish: boolean;
+      /** A winning play and Last Card has not been declared yet — the button must be armed. */
       readonly needsLastCard: boolean;
       readonly outcome: PlayOutcome;
     }
@@ -365,12 +369,16 @@ export function selectionState(view: PlayerView, selection: readonly CardPlay[])
   }
   const outcome = resolvePlays(ctx, selection, { two: view.rules.twoPenalty, blackJack: view.rules.blackJackPenalty });
   const goesOut = outcome.cardsLeft === 0;
+  const wins = goesOut && !outcome.blockedFinish;
   return {
     kind: 'ready',
     queenPenalty: outcome.queenPenalty,
-    leavesOne: !outcome.queenPenalty && outcome.cardsLeft === 1,
+    // A blocked finish also ends on one card (the automatic pick-up), so Last Card applies.
+    leavesOne: (!outcome.queenPenalty && outcome.cardsLeft === 1) || outcome.blockedFinish,
     goesOut,
-    needsLastCard: goesOut && !ctx.declaredLastCard,
+    wins,
+    blockedFinish: outcome.blockedFinish,
+    needsLastCard: wins && !ctx.declaredLastCard,
     outcome,
   };
 }
@@ -381,8 +389,7 @@ export function explainUnselectable(view: PlayerView, selection: readonly CardPl
   const ctx = contextFromView(view);
   const trial: CardPlay[] = [...selection, card.rank === 'A' ? { cardId: card.id, chosenSuit: card.suit } : { cardId: card.id }];
   const err = checkPlays(ctx, trial, true);
-  if (err && err.code !== 'QUEEN_MUST_BE_COVERED' && err.code !== 'CANNOT_FINISH_ON_POWER_CARD') return err.message;
-  if (selection.length === 0 && view.hand.length === 1) return 'You can’t finish on a 2, 8, Jack, Queen, King or Ace — draw instead';
+  if (err && err.code !== 'QUEEN_MUST_BE_COVERED') return err.message;
   return err?.message ?? 'That card can’t be played now';
 }
 

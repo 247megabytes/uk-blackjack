@@ -28,11 +28,11 @@ describe('stacking 2s', () => {
     expect(current(s)).toBe('p1');
   });
 
-  it('only 2s (or a red Jack, v1.2) may answer a 2 attack — no black Jacks, no suit matches', () => {
+  it('v1.2: a 2 attack is answered by any 2, black Jack or red Jack — never by a suit match', () => {
     const s = act(scenario({ hands: [['2H', ...filler], ['JS', 'JH', '5H', '9C'], ['3C']], top: '9H' }), play('p1', '2H'));
-    expect(reject(s, play('p2', 'JS'))).toBe('MUST_ANSWER_ATTACK');
     expect(reject(s, play('p2', '5H'))).toBe('MUST_ANSWER_ATTACK');
-    expect(getLegalMoves(s, 'p2')).toEqual([single('JH'), { type: 'DRAW' }]);
+    expect(getLegalMoves(s, 'p2')).toEqual([single('JS'), single('JH'), { type: 'DRAW' }]);
+    expect(act(s, play('p2', 'JS')).pendingAttack).toEqual({ kind: 'blackJack', amount: 7 });
   });
 });
 
@@ -56,12 +56,12 @@ describe('stacking black Jacks', () => {
     expect(current(s)).toBe('p1');
   });
 
-  it('a 2 cannot be mixed into a Jack attack, nor a black Jack into a 2 attack', () => {
+  it('v1.2: 2s and black Jacks share one pickup — a 2 on a black Jack adds 2, a black Jack on a 2 adds 5', () => {
     const jackAttack = act(scenario({ hands: [['JS', ...filler], ['2S', '9C', '7D'], ['3C']], top: '9S' }), play('p1', 'JS'));
-    expect(reject(jackAttack, play('p2', '2S'))).toBe('MUST_ANSWER_ATTACK');
+    expect(act(jackAttack, play('p2', '2S')).pendingAttack).toEqual({ kind: 'two', amount: 7 });
     expect(reject(jackAttack, play('p2', '9C'))).toBe('MUST_ANSWER_ATTACK');
     const twoAttack = act(scenario({ hands: [['2S', ...filler], ['JS', 'JC', '7D'], ['3C']], top: '9S' }), play('p1', '2S'));
-    expect(reject(twoAttack, play('p2', 'JS'))).toBe('MUST_ANSWER_ATTACK');
+    expect(act(twoAttack, play('p2', 'JS')).pendingAttack).toEqual({ kind: 'blackJack', amount: 7 });
   });
 });
 

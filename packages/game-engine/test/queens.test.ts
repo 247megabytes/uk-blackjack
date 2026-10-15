@@ -43,8 +43,12 @@ describe('Queen covering', () => {
     expect(top(act(s, seq('p1', ['QS', '5S', '5H'])))).toBe('5H');
   });
 
-  it('a Queen cannot be the winning card', () => {
-    expect(reject(scenario({ hands: [['QH'], ['4D']], top: '9H' }), play('p1', 'QH'))).toBe('CANNOT_FINISH_ON_POWER_CARD');
+  it('v1.2: a Queen is never the winning card — as the last card it stays uncovered and the player picks up exactly 1', () => {
+    const s = act(scenario({ hands: [['QH'], ['4D', '5D']], top: '9H', drawPile: ['7S'], leftovers: 'discard' }), play('p1', 'QH', true));
+    expect(s.phase).toBe('playing');
+    expect(top(s)).toBe('QH');
+    expect(hand(s, 'p1')).toEqual(['7S']);
+    expect(s.events.filter((e) => e.type === 'CARDS_DRAWN' && e.playerId === 'p1')).toHaveLength(1);
   });
 
   it('getLegalMoves offers Queen + cover as one complete move', () => {
@@ -83,11 +87,12 @@ describe('Queen penalty — cannot cover', () => {
     expect(top(act(s2, play('p2', '5H')))).toBe('5H');
   });
 
-  it('a cover that would have to be an illegal finishing card does not count: play the Queen and pick up', () => {
+  it('v1.2: a power-card cover still counts even as the last card — it must be used (then the player picks up 1)', () => {
     const s0 = scenario({ hands: [['QH', '2H'], ['5D', '6D']], top: '9H', drawPile: ['7S'], leftovers: 'discard' });
-    expect(reject(s0, seq('p1', ['QH', '2H']))).toBe('CANNOT_FINISH_ON_POWER_CARD');
-    const s = act(s0, play('p1', 'QH'));
-    expect(hand(s, 'p1')).toEqual(['2H', '7S']);
+    expect(reject(s0, play('p1', 'QH'))).toBe('QUEEN_MUST_BE_COVERED');
+    const s = act(s0, seq('p1', ['QH', '2H']));
+    expect(hand(s, 'p1')).toEqual(['7S']);
+    expect(s.pendingAttack).toEqual({ kind: 'two', amount: 2 }); // the cover's power stands
   });
 
   it('a Queen penalty never opens the Last Card window (the hand grows back to 2+)', () => {

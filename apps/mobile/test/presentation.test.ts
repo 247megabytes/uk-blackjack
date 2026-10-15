@@ -130,7 +130,7 @@ describe('view helpers', () => {
   it('status line explains attacks', () => {
     const m = new MatchController({ seed: 'att', humanName: 'A', botCount: 1 });
     const s = { ...m.state, pendingAttack: { kind: 'blackJack' as const, amount: 10 }, currentPlayerIndex: 0 };
-    expect(statusLine(getPlayerView(s, 'you'), nameOf)).toBe('Play a Jack or pick up 10');
+    expect(statusLine(getPlayerView(s, 'you'), nameOf)).toBe('Pick up 10 — or answer with a 2 or a Jack (a red Jack cancels it)');
     void applyAction;
   });
 

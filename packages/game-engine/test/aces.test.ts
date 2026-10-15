@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, findInvariantViolations, getLegalMoves, getPlayerView, startGame } from '@ukbj/game-engine';
-import { act, current, play, reject, scenario, seq, top } from './helpers';
+import { act, current, hand, play, reject, scenario, seq, top } from './helpers';
 
 describe('wild Aces', () => {
   it('can be played on anything and sets the chosen suit', () => {
@@ -62,15 +62,16 @@ describe('wild Aces — attacks, Queens and finishing', () => {
     expect(reject(s, play('p2', 'AH>S'))).toBe('MUST_ANSWER_ATTACK');
   });
 
-  it('cannot be the winning card, alone or at the end of a sequence', () => {
-    expect(reject(scenario({ hands: [['AH'], ['4D']], top: '9C' }), play('p1', 'AH>S'))).toBe('CANNOT_FINISH_ON_POWER_CARD');
-    expect(reject(scenario({ hands: [['9H', 'AH'], ['4D']], top: '9C' }), seq('p1', ['9H', 'AH>S']))).toBe('CANNOT_FINISH_ON_POWER_CARD');
+  it('v1.2: is never the winning card — played as the last card it calls the suit and the player picks up 1', () => {
+    const s = act(scenario({ hands: [['AH'], ['4D', '5D']], top: '9C', drawPile: ['6S'], leftovers: 'discard' }), play('p1', 'AH>S', true));
+    expect(s.phase).toBe('playing');
+    expect(s.activeSuit).toBe('S');
+    expect(hand(s, 'p1')).toEqual(['6S']);
+    expect(current(s)).toBe('p2');
   });
 
-  it('covering your own black Jack with an Ace neutralises the attack (documented choice)', () => {
-    const s = act(scenario({ hands: [['JS', 'AD', '3C'], ['4D']], top: '9S' }), seq('p1', ['JS', 'AD>H']));
-    expect(s.pendingAttack).toBeNull();
-    expect(s.activeSuit).toBe('H');
+  it('v1.2: an Ace cannot follow a black Jack (only a black Jack, a 2 or a red Jack can)', () => {
+    expect(reject(scenario({ hands: [['JS', 'AS', '3C'], ['4D']], top: '9S' }), seq('p1', ['JS', 'AS>H']))).toBe('BLACK_JACK_FOLLOW');
   });
 
   it('a starter Ace keeps its printed suit and needs no choice', () => {
@@ -82,13 +83,14 @@ describe('wild Aces — attacks, Queens and finishing', () => {
 });
 
 describe('wild Aces in sequences', () => {
-  it('v1.2: may end any sequence (7♠ → A♦→♥), but nothing may follow an Ace', () => {
-    const s = scenario({ hands: [['7S', 'AD', '5H', '5S', '3C'], ['4D']], top: '7H' });
-    const after = act(s, seq('p1', ['7S', 'AD>H']));
-    expect(top(after)).toBe('AD');
-    expect(after.activeSuit).toBe('H');
-    expect(current(after)).toBe('p2');
-    expect(reject(s, seq('p1', ['7S', 'AD>H', '5H']))).toBe('ACE_MUST_BE_LAST');
+  it('v1.2: may only follow another card as the end of a descending same-suit run; nothing may follow it', () => {
+    const s = scenario({ hands: [['7S', 'AD', 'AS', '5H', '3C'], ['4D']], top: '7H' });
+    expect(reject(s, seq('p1', ['7S', 'AD>H']))).toBe('INVALID_SEQUENCE');
+    expect(reject(s, seq('p1', ['7S', 'AS>H']))).toBe('INVALID_SEQUENCE'); // same suit, but 7 → A is not a run
+    const alone = act(s, play('p1', 'AD>H'));
+    expect(alone.activeSuit).toBe('H');
+    expect(current(alone)).toBe('p2');
+    expect(reject(s, seq('p1', ['AD>H', '5H']))).toBe('ACE_MUST_BE_LAST');
   });
 
   it('v1.2: counts as 1 at the END of a descending run (3♠ → 2♠ → A♠), never mid-sequence', () => {

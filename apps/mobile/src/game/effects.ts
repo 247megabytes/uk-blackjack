@@ -38,6 +38,11 @@ export function ordinal(n: number): string {
   return `${n}${s}`;
 }
 
+function articleName(card: Card): string {
+  const n = RANK_NAMES[card.rank];
+  return `${n === 'Ace' || n === 'Eight' ? 'an' : 'a'} ${n}`;
+}
+
 function powerList(cards: readonly Card[]): string {
   const names = cards.map((c) => (c.rank === 'J' ? 'Jack' : c.rank === 'K' ? 'King' : c.rank));
   const uniq = [...new Set(names)];
@@ -144,6 +149,15 @@ export function describeEvents(
           playerId: e.playerId,
         });
         break;
+      case 'FINISH_BLOCKED':
+        push(e, {
+          title: `Can’t win on ${articleName(e.card)}`,
+          subtitle: `${who(e.playerId)} ${isYou(e.playerId) ? 'pick' : 'picks'} up 1`,
+          tone: 'warn',
+          haptic: isYou(e.playerId) ? 'warning' : 'light',
+          playerId: e.playerId,
+        });
+        break;
       case 'POWER_COVERED':
         push(e, {
           title: 'Covered',
@@ -217,9 +231,7 @@ export function statusLine(view: PlayerView, nameOf: (id: PlayerId) => string): 
   const yourTurn = view.currentPlayerId === view.viewerId;
   if (!yourTurn) return `${nameOf(view.currentPlayerId)} is thinking…`;
   if (view.pendingAttack) {
-    return view.pendingAttack.kind === 'two'
-      ? `Play a 2 or a red Jack, or pick up ${view.pendingAttack.amount}`
-      : `Play a Jack or pick up ${view.pendingAttack.amount}`;
+    return `Pick up ${view.pendingAttack.amount} — or answer with a 2 or a Jack (a red Jack cancels it)`;
   }
   const top = view.topCard;
   const hasPlay = view.legalMoves.some((m) => m.type === 'PLAY_CARDS');

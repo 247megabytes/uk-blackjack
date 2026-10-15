@@ -113,9 +113,28 @@ describe('tap-to-build sequences', () => {
     expect(buildPlay(v, sel, false)).toEqual({ type: 'PLAY_CARDS', plays: sel });
   });
 
-  it('a red Jack lights up against a 2 attack', () => {
-    const v = viewOf(['JD', 'JS', '5C'], '2H', { pendingAttack: { kind: 'two', amount: 2 } });
-    expect([...selectableCardIds(v, [])]).toEqual(['JD']);
+  it('any 2 or Jack lights up against a pickup (unified pickups), nothing else', () => {
+    const v = viewOf(['JD', 'JS', '2C', '5C', 'AH'], '2H', { pendingAttack: { kind: 'two', amount: 2 } });
+    expect([...selectableCardIds(v, [])].sort()).toEqual(['2C', 'JD', 'JS']);
+  });
+
+  it('after a black Jack only another black Jack, a 2 or a red Jack lights up', () => {
+    const v = viewOf(['JS', 'JC', 'JD', '2H', 'QS', '10S', 'AS', '3C'], '9S');
+    expect([...selectableCardIds(v, tapIds(v, ['JS']))].sort()).toEqual(['2H', 'JC', 'JD']);
+  });
+
+  it('a sequence ending the hand on a power card is playable and labelled as an automatic pick-up', () => {
+    const v = viewOf(['9S', '8S'], '9C');
+    const sel = tapIds(v, ['9S', '8S']);
+    const st = selectionState(v, sel);
+    expect(st.kind === 'ready' && st.blockedFinish && !st.wins && !st.needsLastCard).toBe(true);
+    expect(buildPlay(v, sel, false)).toEqual({ type: 'PLAY_CARDS', plays: sel });
+    expect(canArmLastCard(v, sel)).toBe(true); // they'll hold one card after the pick-up
+  });
+
+  it('an Ace only lights up mid-turn as the end of a descending run in its suit', () => {
+    const v = viewOf(['3H', '2H', 'AH', 'AS', '9C'], '3S');
+    expect([...selectableCardIds(v, tapIds(v, ['3H', '2H']))].sort()).toEqual(['AH']);
   });
 
   it('flags power cards that a later card will cover', () => {

@@ -76,7 +76,8 @@ describe('deck exhaustion', () => {
  */
 describe('stalemate detection and resolution', () => {
   it('declares a stalemate when nothing can be drawn and nobody can play (tie → draw)', () => {
-    const s = scenario({ hands: [['3C', '4C'], ['2H'], ['KH']], top: '9H', drawPile: [], discardUnder: [], leftovers: 'none' });
+    // v1.2: a lone power card that matches can now be played (it just doesn't win), so these don't match.
+    const s = scenario({ hands: [['3C', '4C'], ['5D'], ['KD']], top: '9H', drawPile: [], discardUnder: [], leftovers: 'none' });
     const after = act(s, draw('p1'));
     expect(after.phase).toBe('finished');
     expect(checkWinner(after)).toEqual({ winnerId: null, endReason: 'stalemate' });
@@ -84,7 +85,7 @@ describe('stalemate detection and resolution', () => {
   });
 
   it('awards a stalemate to the unique smallest hand', () => {
-    const s = scenario({ hands: [['3C', '4C'], ['2H'], ['KC', '5C']], top: '9H', drawPile: [], discardUnder: [], leftovers: 'none' });
+    const s = scenario({ hands: [['3C', '4C'], ['5D'], ['KC', '5C']], top: '9H', drawPile: [], discardUnder: [], leftovers: 'none' });
     expect(checkWinner(act(s, draw('p1')))).toEqual({ winnerId: 'p2', endReason: 'stalemate' });
   });
 

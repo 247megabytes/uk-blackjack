@@ -4,7 +4,7 @@
  */
 
 import { SUITS, type Card } from './cards';
-import { hasLegalPlay, isLegalFirstCard, minimalPlayFrom, nextCardOptions, type PlayContext } from './sequence';
+import { hasLegalPlay, isLegalFirstCard, isPickupCard, minimalPlayFrom, nextCardOptions, type PlayContext } from './sequence';
 import type { CardPlay, GameState, MoveIntent, PendingAttack, PlayerId, PlayerState } from './types';
 
 export function topCard(state: GameState): Card | undefined {
@@ -48,9 +48,9 @@ export function matchesTop(card: Card, top: Card | undefined, activeSuit: GameSt
   return isLegalFirstCard({ hand: [card], top: top ?? null, activeSuit, pendingAttack: null, drawnCardId: null }, card);
 }
 
-/** Can `card` legally answer the pending attack? */
-export function canAnswerAttack(card: Card, attack: PendingAttack): boolean {
-  return attack.kind === 'two' ? card.rank === '2' || (card.rank === 'J' && (card.suit === 'H' || card.suit === 'D')) : card.rank === 'J';
+/** Can `card` legally answer the pending pickup? Since v1.2 any 2 or any Jack answers either kind. */
+export function canAnswerAttack(card: Card, _attack: PendingAttack): boolean {
+  return isPickupCard(card);
 }
 
 /** Can `card` start a complete legal play for `player` right now? */

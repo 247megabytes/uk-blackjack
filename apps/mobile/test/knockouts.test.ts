@@ -7,6 +7,8 @@ import {
   MatchController,
   PACING,
   progressLabel,
+  activeCountLabel,
+  eliminatedPlace,
   progressPips,
   roundHeadline,
   roundRows,
@@ -134,6 +136,7 @@ describe('Knockouts presentation', () => {
     expect(rows[3]!.detail).toBe('Last one holding cards (4)');
     expect(roundHeadline(summary, HUMAN_ID, nameOf)).toBe('You’re through!');
     expect(roundHeadline({ ...summary, eliminated: [{ ...summary.eliminated[0]!, playerId: 'you' }], advancing: ['bot2', 'bot3', 'bot1'] }, HUMAN_ID, nameOf)).toBe('You’re knocked out');
+    expect(roundHeadline({ ...summary, eliminated: [{ ...summary.eliminated[0]!, playerId: 'you' }], advancing: ['bot2', 'bot3', 'bot1'] }, HUMAN_ID, nameOf, 4)).toBe('You’re knocked out — 4th place');
   });
 
   it('forfeits and stalled rounds read clearly', () => {
@@ -154,6 +157,7 @@ describe('Knockouts presentation', () => {
     const t = m.tournamentView()!;
     expect(progressLabel(t)).toBe('Round 1 of 3');
     expect(progressPips(t).every((p) => p.alive)).toBe(true);
+    expect(activeCountLabel(t)).toBe('4 of 4 still in');
     const r = runMatch('prog-full', 3, human, undefined, 'knockouts');
     const done = r.match.tournamentView()!;
     expect(progressLabel(done)).toBe('Champion crowned');
@@ -162,6 +166,7 @@ describe('Knockouts presentation', () => {
     expect(st[0]!.detail).toBe('Champion');
     expect(st[1]!.detail).toBe('Runner-up');
     expect(st.map((s) => s.place)).toEqual([1, 2, 3, 4]);
+    for (const s of st.slice(1)) expect(eliminatedPlace(done, s.playerId)).toBe(s.place);
   });
 
   it('banners for finishing, forfeits, rounds and covered powers', () => {

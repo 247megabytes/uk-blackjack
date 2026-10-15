@@ -33,7 +33,8 @@ export function SequenceTray({ selection, hand, state, armed, onPlay, onClear }:
   if (state.kind === 'needsCover') note = { text: `Cover the Queen with a ${SUIT_WORD[state.suit]}`, tone: 'warn' };
   else if (state.kind === 'invalid') note = { text: state.error.message, tone: 'bad' };
   else if (state.kind === 'ready' && state.needsLastCard && !armed) note = { text: 'Tap Last Card first to play out your hand', tone: 'warn' };
-  else if (state.kind === 'ready' && state.goesOut) note = { text: 'Last Card! This plays out your hand', tone: 'ok' };
+  else if (state.kind === 'ready' && state.wins) note = { text: 'Winning play — this empties your hand', tone: 'ok' };
+  else if (state.kind === 'ready' && state.blockedFinish) note = { text: 'Can’t win on a power card — it still takes effect, then you pick up 1', tone: 'warn' };
   else if (state.kind === 'ready' && state.outcome.effects.some((e) => e.kind === 'powerCovered')) note = { text: 'Your covered power card won’t take effect', tone: 'warn' };
   else if (state.kind === 'ready' && state.queenPenalty) note = { text: 'No card to cover the Queen — you’ll pick up 1 and your turn ends', tone: 'warn' };
   else if (state.kind === 'ready' && state.outcome.attack) note = { text: `Next player picks up ${state.outcome.attack.amount} unless they answer`, tone: 'ok' };
@@ -42,7 +43,13 @@ export function SequenceTray({ selection, hand, state, armed, onPlay, onClear }:
 
   const canPlay = state.kind === 'ready';
   const label =
-    state.kind === 'ready' && state.queenPenalty ? 'Play and pick up 1' : state.kind === 'ready' && state.goesOut ? 'Play out' : count === 1 ? 'Play card' : `Play ${count} cards`;
+    state.kind === 'ready' && (state.queenPenalty || state.blockedFinish)
+      ? 'Play and pick up 1'
+      : state.kind === 'ready' && state.wins
+        ? 'Play to win'
+        : count === 1
+          ? 'Play card'
+          : `Play ${count} cards`;
 
   return (
     <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={styles.tray} accessibilityLabel={`Selected ${count} ${count === 1 ? 'card' : 'cards'}`}>

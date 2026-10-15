@@ -171,6 +171,49 @@
 2s-then-red-Jack, attack cleared on forfeit, forfeit leaving one holder, stalled survivor ranking,
 two-player rules by active count, finished players can't challenge, random first player each round).
 
+## Rules update — uk-classic-v1.2 final brief ✅ (2026-10-15)
+
+Implements the complete v1.2 brief on top of the first v1.2 pass, plus the four answers given on
+2026-10-15.
+
+**Changed**
+- **Unified pick-ups:** 2s (+2) and black Jacks (+5) share one total. Any 2 or Jack answers a pick-up,
+  and a red Jack cancels all of it. Normal sequence rules continue after the cancel (confirmed).
+- **After a black Jack** only a black Jack, a 2 or a red Jack may follow (`BLACK_JACK_FOLLOW`); a 2
+  may be followed by any Jack.
+- **Aces:** on their own, or ending a descending same-suit run (3♥ 2♥ A♥), or covering a Queen of their
+  suit (confirmed). Previously any Ace could end any sequence.
+- **Ending the hand on a 2/8/J/Q/K/A** is now allowed. The effect applies, the player picks up exactly
+  one card, the turn ends and nobody wins (`FINISH_BLOCKED`, draw reason `blockedFinish`). Normal
+  one-card Last Card rules apply afterwards (confirmed). `CANNOT_FINISH_ON_POWER_CARD` is no longer
+  produced.
+- Final runs of 8s and Kings all count (confirmed).
+- Fixed: cards that answer a pick-up always count, even if later cards follow. Before this, a later
+  normal card could "cover" a red Jack's cancel and bring the old pick-up back (found by simulation).
+- Mobile: the pick-up chip shows the shared total; the status line explains the answers; the tray says
+  "Winning play" vs "Can't win on a power card — you pick up 1" (buttons "Play to win" / "Play and pick
+  up 1"); new "Can't win on an Eight" banner; header shows "N of M still in"; a knocked-out human sees
+  their finishing place; buttons renamed "Next round" and "Play again"; How to Play rewritten.
+
+**Verified (in the build sandbox)**
+- `npm run test:offline`: 343 tests, 343 pass, 0 fail (67 suites). New `spec-examples.test.ts`
+  covers every example in the brief; 31 earlier tests were rewritten where the brief changes
+  behaviour.
+- Strict TypeScript clean (packages + tests); the whole app typechecks against real React 19 / React
+  Native 0.86.3 typings.
+- 10,000 Classic games and 10,000 Knockouts tournaments (2,000 each for 2–6 players): all complete, 0
+  violations, 0 rejected bot moves. 3,000 Classic + 3,000 Knockouts with random disconnects: 0
+  violations.
+- Mutation checks: no 2/black-Jack mixing (8 failing tests), no black-Jack follow rule (2), Ace after
+  anything (5), no automatic pick-up on a power finish (19), only 2s answering (14), responses
+  coverable (1, after adding the regression test).
+- Headless browser (real app code): 4 Classic games and 3 six-player Knockouts tournaments played by
+  tapping, including power-card finishes, winning play-outs, round results and the champion screen —
+  0 console errors or warnings.
+
+**Not verified:** real-device feel on the iPhone (that's your check), and stalled rounds arising
+naturally (covered by forced-stall engine tests).
+
 ## Phase 3 — Multiplayer ⏳ next
 
 ## Phase 4 — Polish

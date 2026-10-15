@@ -20,6 +20,7 @@
 | Queen covering, cover rules, Ace covers, mandatory cover, one-card penalty, turn end, next player, hidden penalty card | `game-engine/test/queens.test.ts` |
 | Wild Aces: any-time play, called suit enforcement, invalid suit choices, attacks, finishing, Ace must be last, A as 1 at the end of a run |
 | **v1.2 regression suite, one block per rule**: runs both directions, red Jack cancels any attack (single 2, stacked black Jacks, stacked-then-cancel, nothing after it), pickup ends the turn, final-block powers, Aces last, Last Card to go out (refused / declared on the play / declared earlier / multi-card go-out), Queens unchanged | `game-engine/test/v12.test.ts` |
+| **Every example in the v1.2 brief** (runs, unified pick-ups, black-Jack follow rule, drawing ends turns, final-card powers, Aces, Queens, power-card finishes, declared multi-card wins) plus the answered-pick-up regression | `game-engine/test/spec-examples.test.ts` |
 | **Knockouts**: finishing order, skipped seats, active-only 8/King counting, two-player rule by active count, last holder eliminated, final, Last Card in rounds, finished players can't challenge, turn-cap and deadlock elimination with seeded tie-break, forfeits (hand returned, hidden, turn passes, attack cleared, window closed, classic forfeit win, round ends without eliminating last holder), tournament creation, full progression, round summaries, determinism, mid-round and between-round disconnects, spectator views, invariants on every state | `game-engine/test/knockouts.test.ts` | `game-engine/test/aces.test.ts` |
 | Easy bot legality, bot isolation, deterministic and bulk seeded simulations (2–6 players × 200 games), v1.2 event coverage, bots always declare on go-out, forfeits in classic, Knockouts tournaments (2–6 × 60) with and without random disconnects | `game-bots/test/simulation.test.ts` |
 | Match controller (pacing, memoised bot decisions, Last Card grace/escape/catch, stale plans), 750 matches through the UI drive loop | `apps/mobile/test/match.test.ts` |
@@ -49,6 +50,7 @@ non-final round eliminates someone, nobody eliminated advances.
 ## Test quality check
 Mutation spot-checks: v1 — disabling red-Jack cancellation or allowing a power-card finish each failed 9 tests.
 v1.1 — disabling Queen cover (3), cross-suit runs (2), non-wild Aces (10), Aces finishing (3), no Queen penalty (4).
+v1.2 final — no 2/black-Jack mixing (8), no black-Jack follow rule (2), Ace after anything (5), no automatic pick-up on a power finish (19), only 2s answering (14), coverable responses (1).
 v1.2 — ascending-only runs (12), every power applies again (12), go-out without Last Card (3), red Jack unable to
 cancel 2s (5), Aces allowed mid-sequence (3).
 

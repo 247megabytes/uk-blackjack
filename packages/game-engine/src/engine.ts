@@ -321,6 +321,19 @@ function doPlayCards(w: Work, playerId: PlayerId, plays: readonly CardPlay[], de
 
   const steps = applyOutcome(w, outcome, played);
 
+  if (outcome.blockedFinish) {
+    // v1.2: the hand was emptied on a 2/8/J/Q/K/A. The card's effect stands (applied
+    // above), no winner is declared, and the player picks up exactly one card — this
+    // draw replaces the Queen penalty when the card is an uncoverable Queen. The draw
+    // never touches the pending pickup, skips or reverses.
+    const card = played[played.length - 1]!;
+    if (card.rank === 'Q') emit(w, { type: 'QUEEN_UNCOVERED', playerId, queen: card });
+    emit(w, { type: 'FINISH_BLOCKED', playerId, card });
+    // Always possible: after a play the discard pile holds at least two cards, so the
+    // one under the top can be recycled if the draw pile is empty.
+    drawCards(w, idx, 1, card.rank === 'Q' ? 'queenPenalty' : 'blockedFinish');
+  }
+
   if (player.hand.length === 0) {
     if (declare && !player.declaredLastCard) emit(w, { type: 'LAST_CARD_DECLARED', playerId });
     player.declaredLastCard = false;

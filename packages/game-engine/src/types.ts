@@ -59,6 +59,7 @@ export interface PlayerState {
   readonly status: PlayerStatus;
 }
 
+/** The kind of the last card that added to the pickup (2s and black Jacks share one total since v1.2). */
 export type AttackKind = 'two' | 'blackJack';
 
 export interface PendingAttack {
@@ -215,6 +216,7 @@ export type GameEvent =
   | { readonly type: 'QUEEN_COVERED'; readonly version: number; readonly playerId: PlayerId; readonly queen: Card; readonly cover: Card }
   | { readonly type: 'QUEEN_UNCOVERED'; readonly version: number; readonly playerId: PlayerId; readonly queen: Card }
   | { readonly type: 'POWER_COVERED'; readonly version: number; readonly playerId: PlayerId; readonly cards: readonly Card[] }
+  | { readonly type: 'FINISH_BLOCKED'; readonly version: number; readonly playerId: PlayerId; readonly card: Card }
   | { readonly type: 'CARDS_DRAWN'; readonly version: number; readonly playerId: PlayerId; readonly cards: readonly Card[]; readonly count: number; readonly requested: number; readonly reason: DrawReason }
   | { readonly type: 'ATTACK_STARTED'; readonly version: number; readonly kind: AttackKind; readonly amount: number }
   | { readonly type: 'ATTACK_STACKED'; readonly version: number; readonly kind: AttackKind; readonly amount: number }
@@ -241,7 +243,8 @@ export type GameEvent =
       readonly reason: 'lastHolder' | 'stalled' | 'forfeit';
     };
 
-export type DrawReason = 'normal' | 'blackJackPenalty' | 'twoPenalty' | 'lastCardPenalty' | 'queenPenalty';
+/** blockedFinish: emptied the hand on a card that can't win (v1.2), so one card is picked up. */
+export type DrawReason = 'normal' | 'blackJackPenalty' | 'twoPenalty' | 'lastCardPenalty' | 'queenPenalty' | 'blockedFinish';
 
 export type GameEventType = GameEvent['type'];
 

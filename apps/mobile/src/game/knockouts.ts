@@ -88,11 +88,22 @@ export function finalStandings(t: TournamentView, nameOf: (id: PlayerId) => stri
   return [...top, ...rest].map((r, i) => ({ ...r, name: nameOf(r.playerId), place: i + 1, isYou: r.playerId === youId }));
 }
 
+/** The overall tournament place of a knocked-out player (first out = last place), or null. */
+export function eliminatedPlace(t: Pick<TournamentView, 'entrants' | 'eliminated'>, playerId: PlayerId): number | null {
+  const i = t.eliminated.findIndex((e) => e.playerId === playerId);
+  return i < 0 ? null : t.entrants.length - i;
+}
+
+/** "4 of 6 still in" for the progress display. */
+export function activeCountLabel(t: TournamentView): string {
+  return `${t.alive.length} of ${t.entrants.length} still in`;
+}
+
 /** Headline for the round-results sheet from the human's point of view. */
-export function roundHeadline(summary: RoundSummary, youId: PlayerId, nameOf: (id: PlayerId) => string): string {
+export function roundHeadline(summary: RoundSummary, youId: PlayerId, nameOf: (id: PlayerId) => string, youPlace: number | null = null): string {
   const out = summary.eliminated.find((e) => e.reason !== 'forfeit') ?? summary.eliminated[0];
   if (summary.final) return summary.advancing[0] === youId ? 'You’re the champion!' : `${nameOf(summary.advancing[0] ?? '')} wins the final`;
-  if (out?.playerId === youId) return 'You’re knocked out';
+  if (out?.playerId === youId) return youPlace ? `You’re knocked out — ${ordinal(youPlace)} place` : 'You’re knocked out';
   if (summary.advancing.includes(youId)) return 'You’re through!';
   return out ? `${nameOf(out.playerId)} is knocked out` : `Round ${summary.round} complete`;
 }

@@ -129,7 +129,7 @@ export function AttackChip({ attack }: { attack: PendingAttack | null }) {
   return (
     <Animated.View style={[styles.attack, style]} pointerEvents="none" accessibilityLiveRegion="polite">
       <Text style={styles.attackText}>
-        {attack ? `${attack.kind === 'blackJack' ? 'Black Jack' : 'Twos'}: pick up ${attack.amount}` : ' '}
+        {attack ? `Pick-up: ${attack.amount} cards` : ' '}
       </Text>
     </Animated.View>
   );

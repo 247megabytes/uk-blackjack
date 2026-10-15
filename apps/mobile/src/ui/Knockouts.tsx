@@ -13,7 +13,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import type { PlayerId, Suit, TournamentView } from '@ukbj/game-engine';
-import { finalStandings, progressLabel, progressPips, roundHeadline, roundRows } from '../game';
+import { activeCountLabel, eliminatedPlace, finalStandings, progressLabel, progressPips, roundHeadline, roundRows } from '../game';
 import type { Stats } from '../state/settings';
 import { Button } from './Buttons';
 import { SuitIcon } from './SuitIcon';
@@ -36,10 +36,13 @@ export function TournamentProgress({ tournament, nameOf }: { tournament: Tournam
       accessibilityLabel={`Knockouts, ${label}. ${alive} of ${pips.length} players still in: ${pips.filter((p) => p.alive).map((p) => nameOf(p.playerId)).join(', ')}`}
     >
       <Text style={[styles.progressLabel, tournament.finalRound && styles.progressFinal]}>{label}</Text>
-      <View style={styles.pips}>
-        {pips.map((p) => (
-          <View key={p.playerId} style={[styles.pip, p.alive ? styles.pipAlive : styles.pipOut]} />
-        ))}
+      <View style={styles.pipRow}>
+        <View style={styles.pips}>
+          {pips.map((p) => (
+            <View key={p.playerId} style={[styles.pip, p.alive ? styles.pipAlive : styles.pipOut]} />
+          ))}
+        </View>
+        <Text style={styles.activeCount}>{activeCountLabel(tournament)}</Text>
       </View>
     </View>
   );
@@ -64,9 +67,9 @@ export function RoundResultsOverlay({ tournament, youId, nameOf, eliminated, onN
   const summary = tournament.rounds[tournament.rounds.length - 1];
   if (!summary) return null;
   const rows = roundRows(summary, nameOf, youId, summary.final);
-  const headline = roundHeadline(summary, youId, nameOf);
+  const headline = roundHeadline(summary, youId, nameOf, eliminatedPlace(tournament, youId));
   const nextIsFinal = tournament.alive.length === 2;
-  const nextLabel = nextIsFinal ? 'Play the final' : `Deal round ${tournament.round + 1}`;
+  const nextLabel = nextIsFinal ? 'Play the final' : 'Next round';
   const youThrough = summary.advancing.includes(youId);
 
   return (
@@ -170,7 +173,7 @@ export function ChampionOverlay({ tournament, youId, nameOf, stats, onRematch, o
           <Stat value={stats.championships} label="Titles" />
         </View>
 
-        <Button label="New Knockouts" onPress={onRematch} />
+        <Button label="Play again" onPress={onRematch} accessibilityHint="Starts a new Knockouts tournament" />
         <View style={styles.secondary}>
           <Button label="Change table" variant="secondary" compact onPress={onChangeTable} style={styles.flex} />
           <Button label="Home" variant="secondary" compact onPress={onHome} style={styles.flex} />
@@ -231,6 +234,8 @@ const styles = StyleSheet.create({
   progress: { alignItems: 'center', gap: 4 },
   progressLabel: { color: colors.text, fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
   progressFinal: { color: colors.brassBright, fontFamily: serif, fontSize: 16 },
+  pipRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  activeCount: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
   pips: { flexDirection: 'row', gap: 5 },
   pip: { width: 8, height: 8, borderRadius: 4 },
   pipAlive: { backgroundColor: colors.brass },

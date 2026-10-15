@@ -48,14 +48,18 @@ describe('v1.2 rule 2 — red Jacks cancel any pickup attack', () => {
     expect(s.pendingAttack).toBeNull();
   });
 
-  it('nothing may follow the cancelling red Jack', () => {
-    const s = act(scenario({ hands: [['2S', ...filler], ['JD', 'JH', '7D'], ['5C']], top: '9S' }), play('p1', '2S'));
-    expect(reject(s, seq('p2', ['JD', 'JH']))).toBe('MUST_ANSWER_ATTACK');
+  it('after the cancelling red Jack, normal sequence rules apply (confirmed): only same-rank Jacks can follow it', () => {
+    const s = act(scenario({ hands: [['2S', ...filler], ['JD', 'JH', '7D', '7S'], ['5C']], top: '9S' }), play('p1', '2S'));
+    expect(act(s, seq('p2', ['JD', 'JH'])).pendingAttack).toBeNull();
+    expect(reject(s, seq('p2', ['JD', '7D']))).toBe('INVALID_SEQUENCE');
   });
 
-  it('a red Jack cannot be the last card in hand (finishing restriction still applies)', () => {
-    const s = act(scenario({ hands: [['2S', ...filler], ['JD'], ['5C']], top: '9S' }), play('p1', '2S'));
-    expect(reject(s, play('p2', 'JD', true))).toBe('CANNOT_FINISH_ON_POWER_CARD');
+  it('a red Jack as the last card in hand cancels, but cannot win: the player picks up 1', () => {
+    const s = act(scenario({ hands: [['2S', ...filler], ['JD'], ['5C', '6C']], top: '9S' }), play('p1', '2S'));
+    const after = act(s, play('p2', 'JD', true));
+    expect(after.pendingAttack).toBeNull();
+    expect(after.phase).toBe('playing');
+    expect(hand(after, 'p2')).toHaveLength(1);
   });
 });
 
@@ -88,10 +92,10 @@ describe('v1.2 rule 4 — power cards only act when final', () => {
     expect(resolvePlays(ctx(['2S', '2H', ...filler], '2D'), [{ cardId: '2S' }, { cardId: '2H' }], P).attack).toEqual({ kind: 'two', amount: 4 });
   });
 
-  it('a black Jack covered by an Ace does nothing; a final black Jack attacks', () => {
-    const covered = act(scenario({ hands: [['JS', 'AS', ...filler], ['4D'], ['4H']], top: 'JH' }), seq('p1', ['JS', 'AS>H']));
+  it('a 2 covered by a run card does nothing (3♠ 2♠ → no; 2♠ 3♠ → no pickup); a final black Jack attacks', () => {
+    const covered = act(scenario({ hands: [['2S', '3S', ...filler], ['4D'], ['4H']], top: '2H' }), seq('p1', ['2S', '3S']));
     expect(covered.pendingAttack).toBeNull();
-    expect(covered.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: 'JS' }] });
+    expect(covered.events.find((e) => e.type === 'POWER_COVERED')).toMatchObject({ cards: [{ id: '2S' }] });
     const attacked = act(scenario({ hands: [['JD', 'JS', ...filler], ['4D'], ['4H']], top: 'JH' }), seq('p1', ['JD', 'JS']));
     expect(attacked.pendingAttack).toEqual({ kind: 'blackJack', amount: 5 });
   });
@@ -118,10 +122,17 @@ describe('v1.2 rule 4 — power cards only act when final', () => {
 });
 
 describe('v1.2 rule 5 — Aces must end the sequence', () => {
-  it('an Ace may end a sequence of any length, the player calls the suit and the turn ends', () => {
-    const s = act(scenario({ hands: [['7S', '7D', 'AC', ...filler], ['4D'], ['4H']], top: '7H' }), seq('p1', ['7S', '7D', 'AC>H']));
+  it('an Ace may end a descending same-suit run of any length; the player calls the suit and the turn ends', () => {
+    const s = act(scenario({ hands: [['4C', '3C', '2C', 'AC', '9D', '9H'], ['4D'], ['5H']], top: '4S' }), seq('p1', ['4C', '3C', '2C', 'AC>H']));
     expect(s.activeSuit).toBe('H');
     expect(current(s)).toBe('p2');
+    expect(s.pendingAttack).toBeNull();
+  });
+
+  it('an Ace after a same-rank step or a different suit is refused', () => {
+    const s = scenario({ hands: [['7S', '7D', 'AC', '2H', 'AS', ...filler], ['4D']], top: '7H' });
+    expect(reject(s, seq('p1', ['7S', '7D', 'AC>H']))).toBe('INVALID_SEQUENCE');
+    expect(reject(scenario({ hands: [['2H', 'AS', '3C', '9D'], ['4D']], top: '2C' }), seq('p1', ['2H', 'AS>S']))).toBe('INVALID_SEQUENCE');
   });
 
   it('anything after an Ace is refused with ACE_MUST_BE_LAST', () => {
@@ -130,8 +141,11 @@ describe('v1.2 rule 5 — Aces must end the sequence', () => {
     expect(reject(s, seq('p1', ['AS>S', 'AD>D']))).toBe('ACE_MUST_BE_LAST');
   });
 
-  it('the Ace stays wild but cannot be the winning card', () => {
-    expect(reject(scenario({ hands: [['7S', 'AS'], ['4D']], top: '7H', declared: [false, false] }), seq('p1', ['7S', 'AS>D'], true))).toBe('CANNOT_FINISH_ON_POWER_CARD');
+  it('the Ace stays wild but cannot be the winning card: 3♥ 2♥ A♥ as the last cards picks up 1', () => {
+    const s = act(scenario({ hands: [['3H', '2H', 'AH'], ['4D', '5D']], top: '3C', drawPile: ['9S'], leftovers: 'discard' }), seq('p1', ['3H', '2H', 'AH>D'], true));
+    expect(s.phase).toBe('playing');
+    expect(s.activeSuit).toBe('D');
+    expect(hand(s, 'p1')).toEqual(['9S']);
   });
 
   it('an Ace covering a Queen is still last (Queen → Ace of that suit)', () => {

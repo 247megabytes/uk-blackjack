@@ -1,7 +1,7 @@
 # UK Black Jack
 
 Premium mobile-first multiplayer card game based on the British shedding game (not casino Blackjack).
-Ruleset: `uk-classic-v1.2` (multi-card turns both ways, final-card powers, Queen covering, wild Aces that end the turn, Last Card to go out) plus **Knockouts** mode — see [docs/RULES.md](docs/RULES.md).
+Ruleset: `uk-classic-v1.2` (multi-card turns both ways, unified 2/Jack pick-ups, final-card powers, Queen covering, wild Aces that end the turn, power-card finishes pick up 1, Last Card to win) plus **Knockouts** mode — see [docs/RULES.md](docs/RULES.md).
 
 ## Status
 Phase 2 complete: playable offline mobile game (Expo) against 1–5 bots, on top of the Phase 1
